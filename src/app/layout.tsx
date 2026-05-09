@@ -4,69 +4,61 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: '新应用 | 扣子编程',
-    template: '%s | 扣子编程',
+    default: 'GameVault Pro | AAA Game Guides & Walkthroughs',
+    template: '%s | GameVault Pro',
   },
   description:
-    '扣子编程是一款一站式云端 Vibe Coding 开发平台。通过对话轻松构建智能体、工作流和网站，实现从创意到上线的无缝衔接。',
+    'Your ultimate destination for AAA game guides, walkthroughs, boss strategies, and pro tips. Expert-crafted content for Elden Ring, Baldur\'s Gate 3, Final Fantasy XVI, and more.',
   keywords: [
-    '扣子编程',
-    'Coze Code',
-    'Vibe Coding',
-    'AI 编程',
-    '智能体搭建',
-    '工作流搭建',
-    '网站搭建',
-    '网站部署',
-    '全栈开发',
-    'AI 工程师',
+    'game guides',
+    'walkthroughs',
+    'boss strategies',
+    'AAA games',
+    'Elden Ring guide',
+    'Baldur\'s Gate 3',
+    'Final Fantasy XVI',
+    'God of War Ragnarok',
+    'game tips',
+    'pro gaming guides',
   ],
-  authors: [{ name: 'Coze Code Team', url: 'https://code.coze.cn' }],
-  generator: 'Coze Code',
-  // icons: {
-  //   icon: '',
-  // },
+  authors: [{ name: 'GameVault Pro', url: 'https://gamevault.pro' }],
+  generator: 'GameVault Pro',
   openGraph: {
-    title: '扣子编程 | 你的 AI 工程师已就位',
+    title: 'GameVault Pro | AAA Game Guides & Walkthroughs',
     description:
-      '我正在使用扣子编程 Vibe Coding，让创意瞬间上线。告别拖拽，拥抱心流。',
-    url: 'https://code.coze.cn',
-    siteName: '扣子编程',
-    locale: 'zh_CN',
+      'Expert-crafted game guides for the biggest AAA titles. Boss strategies, build guides, and pro tips updated daily.',
+    locale: 'en_US',
     type: 'website',
-    // images: [
-    //   {
-    //     url: '',
-    //     width: 1200,
-    //     height: 630,
-    //     alt: '扣子编程 - 你的 AI 工程师',
-    //   },
-    // ],
+    siteName: 'GameVault Pro',
   },
-  // twitter: {
-  //   card: 'summary_large_image',
-  //   title: 'Coze Code | Your AI Engineer is Here',
-  //   description:
-  //     'Build and deploy full-stack applications through AI conversation. No env setup, just flow.',
-  //   // images: [''],
-  // },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'GameVault Pro | AAA Game Guides',
+    description:
+      'Expert-crafted game guides for the biggest AAA titles.',
+  },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
-  const isDev = process.env.COZE_PROJECT_ENV === 'DEV';
-
+}) {
   return (
-    <html lang="en">
-      <body className={`antialiased`}>
-        {isDev && <Inspector />}
+    <html lang="en" suppressHydrationWarning>
+      <body className="font-sans antialiased">
+        <Inspector />
         {children}
       </body>
     </html>

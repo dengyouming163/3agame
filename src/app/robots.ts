@@ -1,11 +1,18 @@
-import { MetadataRoute } from 'next';
+import type { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
+  const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT || 'localhost:5000';
+  const protocol = domain.startsWith('localhost') ? 'http' : 'https';
+  const baseUrl = `${protocol}://${domain}`;
+
   return {
-    rules: {
-      userAgent: '*',
-      allow: '/',
-      disallow: ['/api/', '/_next/', '/static/'],
-    },
+    rules: [
+      {
+        userAgent: '*',
+        allow: '/',
+        disallow: ['/admin/', '/api/'],
+      },
+    ],
+    sitemap: `${baseUrl}/sitemap.xml`,
   };
 }
