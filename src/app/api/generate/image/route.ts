@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     const response = await imageClient.generate({
       prompt: imagePrompt,
-      size: '2K',
+      size: '1K',
       watermark: false,
     });
 
