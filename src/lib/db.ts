@@ -138,10 +138,8 @@ async function createPool(): Promise<Pool> {
     max: isProd ? 20 : 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
-    // Production server may need SSL
-    ssl: isProd
-      ? { rejectUnauthorized: false }
-      : { rejectUnauthorized: false },
+    // Local PostgreSQL does not support SSL, disable it
+    ssl: false,
   };
 
   const newPool = new Pool(config);
@@ -167,7 +165,7 @@ async function createPool(): Promise<Pool> {
           max: 10,
           idleTimeoutMillis: 30000,
           connectionTimeoutMillis: 5000,
-          ssl: { rejectUnauthorized: false },
+          ssl: false,
         });
         const client = await fallbackPool.connect();
         client.release();
