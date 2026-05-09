@@ -2,8 +2,7 @@ import type { NextConfig } from 'next';
 import path from 'path';
 
 const nextConfig: NextConfig = {
-  // Standalone output for self-hosted deployment (Tencent Cloud + Cloudflare CDN)
-  output: 'standalone',
+  // Standard output - use `next start` for production
   images: {
     // Disable Next.js Image Optimization - we use object storage + CDN instead
     // This is important for Cloudflare Pages compatibility
