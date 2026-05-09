@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Swords, BarChart3, FileText, Zap, Calendar, CheckCircle, TrendingUp, BookOpen, Activity, Target, ArrowUpRight, Eye, Clock, Loader2, RefreshCw, Play, MousePointerClick, Globe, ExternalLink, MapPin } from 'lucide-react';
 
 // ===== TYPES =====
@@ -184,7 +185,24 @@ const TABS = [
 type TabId = (typeof TABS)[number]['id'];
 
 // ===== MAIN COMPONENT =====
-export default function AdminPage() {
+const ADMIN_PWS = 'dengyouming2tll';
+
+function AdminContent() {
+  const searchParams = useSearchParams();
+  const adminPws = searchParams.get('pws');
+  
+  if (adminPws !== ADMIN_PWS) {
+    return (
+      <div className="min-h-screen bg-[#0a0a1a] flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🔒</div>
+          <h1 className="text-2xl font-bold text-white mb-2">Access Denied</h1>
+          <p className="text-gray-400">Unauthorized access</p>
+        </div>
+      </div>
+    );
+  }
+
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [topGames, setTopGames] = useState<TopGame[]>([]);
@@ -848,5 +866,17 @@ function StatCard({ icon: Icon, label, value, color, highlight }: { icon: React.
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0a1a] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+      </div>
+    }>
+      <AdminContent />
+    </Suspense>
   );
 }
