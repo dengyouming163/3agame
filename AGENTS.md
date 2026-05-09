@@ -120,7 +120,7 @@
 - `generation_logs` - AI 生成日志 (article_id, game_id, prompt, model, tokens_used)
 
 ### 数据库连接
-- 生产: `DATABASE_URL=postgresql://3agame:dengyouming@123.207.50.64:5432/3agame`
+- 生产: `DATABASE_URL=postgresql://3agamemaster:dengyouming2tll@localhost:15432/3agamemaster`
 - 开发回退: 自动使用 `PGDATABASE_URL` (平台Supabase)
 - 连接池: max 10, idle timeout 30s, connection timeout 10s
 

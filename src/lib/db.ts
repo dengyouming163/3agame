@@ -108,14 +108,16 @@ let poolInitPromise: Promise<Pool> | null = null;
 
 function getConnectionString(): string {
   // Priority:
-  // 1. DATABASE_URL (production: your PG server at 123.207.50.64)
+  // 1. DATABASE_URL (production: localhost:15432 on your server)
   // 2. PGDATABASE_URL (development: platform-injected Supabase PG)
   return process.env.DATABASE_URL || process.env.PGDATABASE_URL || '';
 }
 
 function isProductionDB(connectionString: string): boolean {
   // Detect if connecting to the production PostgreSQL server
-  return connectionString.includes('123.207.50.64');
+  // Production: localhost:15432 (self-hosted on same server)
+  // Development: platform-injected Supabase PG
+  return connectionString.includes(':15432') || process.env.NODE_ENV === 'production';
 }
 
 async function createPool(): Promise<Pool> {

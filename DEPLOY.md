@@ -69,7 +69,7 @@ cp -r public .
 
 ```bash
 cat > /opt/3agamemaster/.env.local << 'EOF'
-DATABASE_URL=postgresql://3agame:dengyouming@123.207.50.64:5432/3agame
+DATABASE_URL=postgresql://3agamemaster:dengyouming2tll@localhost:15432/3agamemaster
 COZE_PROJECT_DOMAIN_DEFAULT=https://3agamemaster.com
 COZE_PROJECT_ENV=PROD
 ADMIN_PASSWORD=3agame2025

@@ -141,7 +141,7 @@ cp -r public .next/standalone/workspace/projects/
 ```bash
 cd /www/wwwroot/3agamemaster
 cat > .env.production << 'EOF'
-DATABASE_URL=postgresql://3agame:dengyouming@123.207.50.64:5432/3agame
+DATABASE_URL=postgresql://3agamemaster:dengyouming2tll@localhost:15432/3agamemaster
 COZE_PROJECT_DOMAIN_DEFAULT=https://3agamemaster.com
 PORT=5000
 NODE_ENV=production
@@ -163,7 +163,7 @@ EOF
    - **运行目录**：`/www/wwwroot/3agamemaster/.next/standalone/workspace/projects`
    - **环境变量**（点击展开）：
      ```
-     DATABASE_URL=postgresql://3agame:dengyouming@123.207.50.64:5432/3agame
+     DATABASE_URL=postgresql://3agamemaster:dengyouming2tll@localhost:15432/3agamemaster
      COZE_PROJECT_DOMAIN_DEFAULT=https://3agamemaster.com
      PORT=5000
      NODE_ENV=production
@@ -176,7 +176,7 @@ EOF
 ```bash
 cd /www/wwwroot/3agamemaster/.next/standalone/workspace/projects
 
-DATABASE_URL="postgresql://3agame:dengyouming@123.207.50.64:5432/3agame" \
+DATABASE_URL="postgresql://3agamemaster:dengyouming2tll@localhost:15432/3agamemaster" \
 COZE_PROJECT_DOMAIN_DEFAULT="https://3agamemaster.com" \
 PORT=5000 \
 NODE_ENV=production \
@@ -444,7 +444,7 @@ echo "$(date): daily task executed" >> /www/wwwlogs/3agamemaster-cron.log
 |------|----------|
 | 网站打不开 | 宝塔 → PM2管理器 → 检查项目是否运行 |
 | 502 Bad Gateway | PM2项目未启动或端口不对，检查5000端口 |
-| 数据库连不上 | SSH执行 `psql -h 123.207.50.64 -U 3agame -d 3agame` 测试 |
+| 数据库连不上 | SSH执行 `psql -h localhost -p 15432 -U 3agamemaster -d 3agamemaster` 测试 |
 | SSL证书申请失败 | 确保DNS已指向Cloudflare，暂时关闭Cloudflare代理（灰色云朵）再申请 |
 | AI生成超时 | Nginx超时设置调大（proxy_read_timeout 300s） |
 | 图片无法加载 | 检查S3存储配置，查看PM2日志 |
@@ -476,7 +476,7 @@ Cloudflare CDN (全球节点，SSL终止)
     ↓ HTTP :5000
 PM2 → Next.js Standalone Server
     ↓ PostgreSQL连接
-数据库 123.207.50.64:5432
+数据库 localhost:15432
     ↓
 S3对象存储 (CDN分发图片)
 ```
