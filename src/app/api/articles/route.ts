@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { getStorage } from '@/lib/storage';
+import { getImageUrl } from '@/lib/storage';
 
 export async function GET(request: NextRequest) {
   try {
@@ -72,18 +72,7 @@ export async function GET(request: NextRequest) {
     // Resolve cover_image_key → cover_image_url for each article
     const articlesWithUrls = await Promise.all(
       dataResult.rows.map(async (article: Record<string, unknown>) => {
-        let coverImageUrl: string | null = null;
-        if (article.cover_image_key) {
-          try {
-            const storage = getStorage();
-            coverImageUrl = await storage.generatePresignedUrl({
-              key: article.cover_image_key as string,
-              expireTime: 604800, // 7 days for CDN-friendly URLs
-            });
-          } catch {
-            // Ignore storage errors
-          }
-        }
+        const coverImageUrl = await getImageUrl(article.cover_image_key as string | null);
         return { ...article, cover_image_url: coverImageUrl };
       })
     );

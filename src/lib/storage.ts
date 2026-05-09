@@ -106,15 +106,20 @@ export async function uploadImageFromUrl(url: string): Promise<string | null> {
 
 /**
  * Get a publicly accessible image URL for display.
- * Handles three cases:
+ * Handles cases:
  * 1. Full URL (https://...) → return as-is (R2 CDN URL or any external URL)
- * 2. Storage key (TOS key like "generate_image_xxx.jpeg") → generate signed URL
- * 3. Empty/null → placeholder
+ * 2. Storage key in production → construct R2 CDN URL
+ * 3. Storage key in development → generate TOS signed URL
+ * 4. Empty/null → placeholder
  */
 export async function getImageUrl(key: string | null | undefined): Promise<string> {
   if (!key) return '/placeholder-image.svg';
   if (key.startsWith('http://') || key.startsWith('https://')) return key;
-  // It's a TOS storage key - generate signed URL (development only)
+  // Production: construct R2 CDN URL from storage key
+  if (isProduction()) {
+    return `https://${R2_PUBLIC_DOMAIN}/articles/${key}`;
+  }
+  // Development: TOS storage key - generate signed URL
   try {
     const storage = getTOSStorage();
     return storage.generatePresignedUrl({ key, expireTime: 604800 });
@@ -125,14 +130,18 @@ export async function getImageUrl(key: string | null | undefined): Promise<strin
 
 /**
  * Get image URL synchronously (for SSR without await).
- * Only works for full URLs or local paths, not storage keys.
- * For storage keys, use getImageUrl() instead.
+ * Only works for full URLs, R2 CDN keys (production), or local paths.
+ * For TOS storage keys in development, use getImageUrl() instead.
  */
 export function getImageUrlSync(key: string | null | undefined): string {
   if (!key) return '/placeholder-image.svg';
   if (key.startsWith('http://') || key.startsWith('https://')) return key;
   if (key.startsWith('/')) return key;
-  // It's a storage key - return placeholder, will be resolved client-side
+  // Production: construct R2 CDN URL from storage key
+  if (isProduction()) {
+    return `https://${R2_PUBLIC_DOMAIN}/articles/${key}`;
+  }
+  // Development: TOS storage key - return placeholder, will be resolved client-side
   return '/placeholder-image.svg';
 }
 

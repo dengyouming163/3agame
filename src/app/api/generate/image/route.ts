@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ImageGenerationClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
-import { getStorage } from '@/lib/storage';
+import { uploadImageFromUrl, getImageUrl } from '@/lib/storage';
 import { query } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
@@ -39,12 +39,18 @@ export async function POST(request: NextRequest) {
 
     const imageUrl = helper.imageUrls[0];
 
-    // Upload to object storage for persistence
-    const storage = getStorage();
-    const imageKey = await storage.uploadFromUrl({
-      url: imageUrl,
-      timeout: 60000,
-    });
+    // Upload to object storage for persistence (R2 in production, TOS in dev)
+    const storageResult = await uploadImageFromUrl(imageUrl);
+    if (!storageResult) {
+      return NextResponse.json(
+        { error: 'Failed to upload image to storage' },
+        { status: 500 }
+      );
+    }
+
+    // In production, storageResult is the full R2 CDN URL; extract key for DB
+    // In development, storageResult is the TOS key
+    const imageKey = storageResult;
 
     // Update article with cover image if articleId provided
     if (articleId) {
@@ -54,16 +60,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate a signed URL for immediate display
-    const signedUrl = await storage.generatePresignedUrl({
-      key: imageKey,
-      expireTime: 86400,
-    });
+    // Get display URL (handles both R2 CDN URLs and TOS keys)
+    const displayUrl = await getImageUrl(imageKey);
 
     return NextResponse.json({
       success: true,
       imageKey,
-      imageUrl: signedUrl,
+      imageUrl: displayUrl,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

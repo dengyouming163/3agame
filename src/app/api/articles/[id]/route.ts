@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { getStorage } from '@/lib/storage';
+import { getImageUrl } from '@/lib/storage';
 
 export async function GET(
   request: NextRequest,
@@ -30,19 +30,8 @@ export async function GET(
 
     const article = result.rows[0];
 
-    // Generate signed URL for cover image if exists
-    let coverImageUrl: string | null = null;
-    if (article.cover_image_key) {
-      try {
-        const storage = getStorage();
-        coverImageUrl = await storage.generatePresignedUrl({
-          key: article.cover_image_key,
-          expireTime: 86400,
-        });
-      } catch {
-        // Ignore storage errors
-      }
-    }
+    // Generate image URL for cover image if exists
+    const coverImageUrl = await getImageUrl(article.cover_image_key);
 
     return NextResponse.json({
       article: {
