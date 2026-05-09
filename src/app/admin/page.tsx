@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Swords, Shield, Map, Gamepad2, Lightbulb, BarChart3, FileText, Zap, Calendar, Trash2, Eye, CheckCircle, RefreshCw, Clock, TrendingUp, BookOpen, AlertCircle, ChevronDown, ChevronRight, Loader2, ImagePlus, Flame, Sparkles, ListChecks } from 'lucide-react';
+import { Swords, Shield, Map, Gamepad2, Lightbulb, BarChart3, FileText, Zap, Calendar, Trash2, Eye, CheckCircle, RefreshCw, Clock, TrendingUp, BookOpen, AlertCircle, ChevronDown, ChevronRight, Loader2, ImagePlus, Flame, Sparkles, ListChecks, Play, CheckCheck, XCircle, Activity, Target, ArrowUpRight } from 'lucide-react';
 
 // ===== TYPES =====
 interface Article {
@@ -36,6 +36,7 @@ interface QueueItem {
   status: string;
   attempts: number;
   article_title: string;
+  article_status: string;
 }
 
 interface DashboardStats {
@@ -45,6 +46,10 @@ interface DashboardStats {
   queueByStatus: Record<string, number>;
   todayPublished: number;
   weekGenerated: number;
+  generationSuccessRate: number;
+  pendingReview: number;
+  readyToPublish: number;
+  scheduledToday: number;
 }
 
 interface TopGame {
@@ -81,10 +86,24 @@ interface PlannedArticle {
   guideType: string;
 }
 
+interface ScheduleStats {
+  total: number;
+  pending: number;
+  published: number;
+  failed: number;
+  today_scheduled: number;
+  today_published: number;
+}
+
+interface TrendItem {
+  date: string;
+  count: number;
+}
+
 // ===== TAB CONFIG =====
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-  { id: 'articles', label: 'Articles', icon: FileText },
+  { id: 'articles', label: 'Review', icon: FileText },
   { id: 'generate', label: 'AI Generate', icon: Zap },
   { id: 'schedule', label: 'Schedule', icon: Calendar },
 ] as const;
@@ -114,13 +133,13 @@ function getQueueStatusBadge(status: string) {
 
 function getGuideTypeIcon(type: string) {
   const map: Record<string, string> = {
-    boss: '⚔️',
-    build: '🛡️',
-    collectible: '🗺️',
-    walkthrough: '📖',
-    tips: '💡',
+    boss: '\u2694\uFE0F',
+    build: '\uD83D\uDEE1\uFE0F',
+    collectible: '\uD83D\uDDFA\uFE0F',
+    walkthrough: '\uD83D\uDCD6',
+    tips: '\uD83D\uDCA1',
   };
-  return map[type] || '📝';
+  return map[type] || '\uD83D\uDCDD';
 }
 
 // ===== MAIN COMPONENT =====
@@ -128,9 +147,12 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [topGames, setTopGames] = useState<TopGame[]>([]);
+  const [publishTrend, setPublishTrend] = useState<TrendItem[]>([]);
+  const [generationTrend, setGenerationTrend] = useState<TrendItem[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [games, setGames] = useState<Game[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [scheduleStats, setScheduleStats] = useState<ScheduleStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedGame, setSelectedGame] = useState<string>('');
   const [generating, setGenerating] = useState(false);
@@ -138,6 +160,8 @@ export default function AdminPage() {
   const [expandedArticle, setExpandedArticle] = useState<number | null>(null);
   const [scheduleDate, setScheduleDate] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [selectedArticles, setSelectedArticles] = useState<Set<number>>(new Set());
+  const [batchActionLoading, setBatchActionLoading] = useState(false);
 
   // AI Generate tab state
   const [guideType, setGuideType] = useState<string>('');
@@ -151,6 +175,12 @@ export default function AdminPage() {
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [showBatchPlan, setShowBatchPlan] = useState(false);
 
+  // Daily schedule state
+  const [dailyCount, setDailyCount] = useState(3);
+  const [dailyStartHour, setDailyStartHour] = useState(9);
+  const [dailyInterval, setDailyInterval] = useState(3);
+  const [schedulingDaily, setSchedulingDaily] = useState(false);
+
   const fetchDashboard = useCallback(async () => {
     try {
       const res = await fetch('/api/dashboard');
@@ -158,6 +188,8 @@ export default function AdminPage() {
         const data = await res.json();
         setStats(data.stats);
         setTopGames(data.topGames || []);
+        setPublishTrend(data.publishTrend || []);
+        setGenerationTrend(data.generationTrend || []);
       }
     } catch (e) { console.error(e); }
   }, []);
@@ -193,6 +225,7 @@ export default function AdminPage() {
       if (res.ok) {
         const data = await res.json();
         setQueue(data.queue || []);
+        setScheduleStats(data.scheduleStats || null);
       }
     } catch (e) { console.error(e); }
   }, []);
@@ -234,7 +267,7 @@ export default function AdminPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'reviewed' }),
     });
-    if (res.ok) fetchArticles();
+    if (res.ok) { fetchArticles(); fetchDashboard(); }
   };
 
   const handlePublishNow = async (articleId: number) => {
@@ -243,13 +276,54 @@ export default function AdminPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'published' }),
     });
-    if (res.ok) fetchArticles();
+    if (res.ok) { fetchArticles(); fetchDashboard(); fetchQueue(); }
   };
 
   const handleDelete = async (articleId: number) => {
     if (!confirm('Delete this article?')) return;
     const res = await fetch(`/api/articles/${articleId}`, { method: 'DELETE' });
-    if (res.ok) fetchArticles();
+    if (res.ok) { fetchArticles(); fetchDashboard(); }
+  };
+
+  const handleBatchAction = async (action: 'review' | 'publish' | 'delete') => {
+    if (selectedArticles.size === 0) return;
+    if (action === 'delete' && !confirm(`Delete ${selectedArticles.size} articles?`)) return;
+
+    setBatchActionLoading(true);
+    try {
+      const res = await fetch('/api/articles/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ids: Array.from(selectedArticles) }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSelectedArticles(new Set());
+        fetchArticles();
+        fetchDashboard();
+        fetchQueue();
+        alert(`${action.charAt(0).toUpperCase() + action.slice(1)}d ${data.affected} article(s)`);
+      }
+    } catch (e) {
+      alert('Batch action failed');
+      console.error(e);
+    }
+    setBatchActionLoading(false);
+  };
+
+  const toggleSelectArticle = (id: number) => {
+    setSelectedArticles(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    const visibleIds = articles
+      .filter(a => statusFilter ? a.status === statusFilter : true)
+      .map(a => a.id);
+    setSelectedArticles(new Set(visibleIds));
   };
 
   const handleGenerate = async () => {
@@ -269,7 +343,6 @@ export default function AdminPage() {
       if (data.success) {
         alert(`Generated: "${data.article.title}" (${data.article.guideType || 'guide'})`);
         fetchArticles();
-        // Refresh topics to mark used
         const game = games.find(g => g.id.toString() === selectedGame);
         if (game) fetchTopics(game.slug);
       } else {
@@ -318,6 +391,29 @@ export default function AdminPage() {
     } else {
       alert(`Error: ${data.error}`);
     }
+  };
+
+  const handleDailySchedule = async () => {
+    setSchedulingDaily(true);
+    try {
+      const res = await fetch('/api/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dailySchedule: { count: dailyCount, startHour: dailyStartHour, intervalHours: dailyInterval } }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        fetchQueue();
+        fetchDashboard();
+      } else {
+        alert(`Error: ${data.error}`);
+      }
+    } catch (e) {
+      alert('Daily scheduling failed');
+      console.error(e);
+    }
+    setSchedulingDaily(false);
   };
 
   const handleProcessQueue = async () => {
@@ -402,37 +498,96 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-8 overflow-x-auto border-b border-border pb-px">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition-all ${
-                activeTab === tab.id
-                  ? 'border-purple-400 text-purple-400'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <tab.icon className="h-4 w-4" />
-              {tab.label}
-            </button>
-          ))}
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition-all ${
+                  activeTab === tab.id
+                    ? 'border-purple-400 text-purple-400'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+                {tab.id === 'articles' && stats && stats.pendingReview > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold">{stats.pendingReview}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Dashboard Tab */}
+        {/* ===== Dashboard Tab ===== */}
         {activeTab === 'dashboard' && stats && (
           <div>
-            {/* Stat Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {/* Quick Stats Row */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               <StatCard icon={BookOpen} label="Total Articles" value={stats.totalArticles} color="text-purple-400" />
+              <StatCard icon={Target} label="Pending Review" value={stats.pendingReview} color="text-amber-400" highlight={stats.pendingReview > 0} />
+              <StatCard icon={CheckCircle} label="Ready to Publish" value={stats.readyToPublish} color="text-cyan-400" />
               <StatCard icon={TrendingUp} label="Today Published" value={stats.todayPublished} color="text-green-400" />
               <StatCard icon={Zap} label="This Week Generated" value={stats.weekGenerated} color="text-cyan-400" />
+            </div>
+
+            {/* Second Row: Rate + Schedule */}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              <StatCard icon={Activity} label="Success Rate" value={`${stats.generationSuccessRate}%`} color="text-green-400" />
+              <StatCard icon={Calendar} label="Scheduled Today" value={stats.scheduledToday} color="text-amber-400" />
               <StatCard icon={Gamepad2} label="Total Games" value={stats.totalGames} color="text-amber-400" />
             </div>
 
-            {/* Status Breakdown */}
+            {/* Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              {/* Publish Trend */}
+              <div className="game-card p-6">
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">PUBLISH TREND (7 DAYS)</h3>
+                {publishTrend.length > 0 ? (
+                  <div className="flex items-end gap-2 h-32">
+                    {publishTrend.map((item, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                        <span className="text-xs text-green-400 font-bold">{item.count}</span>
+                        <div
+                          className="w-full rounded-t bg-gradient-to-t from-green-600 to-green-400 transition-all"
+                          style={{ height: `${Math.max(item.count * 20, 4)}px` }}
+                        />
+                        <span className="text-[10px] text-muted-foreground">{item.date.slice(5)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">No publish data yet</p>
+                )}
+              </div>
+
+              {/* Generation Trend */}
+              <div className="game-card p-6">
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">GENERATION TREND (7 DAYS)</h3>
+                {generationTrend.length > 0 ? (
+                  <div className="flex items-end gap-2 h-32">
+                    {generationTrend.map((item, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                        <span className="text-xs text-cyan-400 font-bold">{item.count}</span>
+                        <div
+                          className="w-full rounded-t bg-gradient-to-t from-cyan-600 to-cyan-400 transition-all"
+                          style={{ height: `${Math.max(item.count * 20, 4)}px` }}
+                        />
+                        <span className="text-[10px] text-muted-foreground">{item.date.slice(5)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">No generation data yet</p>
+                )}
+              </div>
+            </div>
+
+            {/* Status + Top Games */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
               <div className="game-card p-6">
-                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">ARTICLE STATUS</h3>
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">ARTICLE STATUS BREAKDOWN</h3>
                 <div className="space-y-3">
                   {Object.entries(stats.articlesByStatus).map(([status, count]) => (
                     <div key={status} className="flex items-center justify-between">
@@ -454,7 +609,7 @@ export default function AdminPage() {
               </div>
 
               <div className="game-card p-6">
-                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">TOP GAMES</h3>
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">TOP GAMES BY COVERAGE</h3>
                 <div className="space-y-3">
                   {topGames.length > 0 ? topGames.map((game, i) => (
                     <div key={game.slug} className="flex items-center justify-between">
@@ -471,7 +626,7 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Queue Status */}
+            {/* Queue Quick View */}
             <div className="game-card p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">PUBLISH QUEUE</h3>
@@ -479,11 +634,11 @@ export default function AdminPage() {
                   onClick={handleProcessQueue}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/30 text-xs font-semibold text-green-400 hover:bg-green-500/20 transition-all"
                 >
-                  <RefreshCw className="h-3 w-3" />
+                  <Play className="h-3 w-3" />
                   Process Now
                 </button>
               </div>
-              <div className="flex gap-4">
+              <div className="flex gap-6">
                 {Object.entries(stats.queueByStatus).map(([status, count]) => (
                   <div key={status} className="flex items-center gap-2">
                     <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${getQueueStatusBadge(status)}`}>
@@ -500,16 +655,16 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Articles Tab */}
+        {/* ===== Articles / Review Tab ===== */}
         {activeTab === 'articles' && (
           <div>
-            {/* Filter */}
-            <div className="flex items-center gap-3 mb-6">
+            {/* Filter + Batch Actions */}
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
               <span className="text-sm text-muted-foreground">Filter:</span>
               {['', 'generated', 'reviewed', 'published'].map((s) => (
                 <button
                   key={s}
-                  onClick={() => setStatusFilter(s)}
+                  onClick={() => { setStatusFilter(s); setSelectedArticles(new Set()); }}
                   className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
                     statusFilter === s
                       ? 'bg-purple-500/20 border border-purple-500/30 text-purple-400'
@@ -519,8 +674,65 @@ export default function AdminPage() {
                   {s ? s.toUpperCase() : 'ALL'}
                 </button>
               ))}
-              <span className="ml-auto text-sm text-muted-foreground">{articles.length} articles</span>
+
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{articles.length} articles</span>
+                {selectedArticles.size > 0 && (
+                  <span className="text-xs text-purple-400 font-semibold">{selectedArticles.size} selected</span>
+                )}
+              </div>
             </div>
+
+            {/* Batch Action Bar */}
+            {selectedArticles.size > 0 && (
+              <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                <span className="text-sm text-purple-300 font-semibold">{selectedArticles.size} selected</span>
+                <div className="flex gap-2 ml-auto">
+                  <button
+                    onClick={() => handleBatchAction('review')}
+                    disabled={batchActionLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/30 text-xs font-bold text-green-400 hover:bg-green-500/30 transition-all disabled:opacity-50"
+                  >
+                    <CheckCheck className="h-3.5 w-3.5" />
+                    Batch Approve
+                  </button>
+                  <button
+                    onClick={() => handleBatchAction('publish')}
+                    disabled={batchActionLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-xs font-bold text-cyan-400 hover:bg-cyan-500/30 transition-all disabled:opacity-50"
+                  >
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                    Batch Publish
+                  </button>
+                  <button
+                    onClick={() => handleBatchAction('delete')}
+                    disabled={batchActionLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-xs font-bold text-red-400 hover:bg-red-500/30 transition-all disabled:opacity-50"
+                  >
+                    <XCircle className="h-3.5 w-3.5" />
+                    Batch Delete
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Select All */}
+            {articles.length > 0 && (
+              <div className="flex items-center gap-3 mb-3">
+                <button
+                  onClick={selectAllVisible}
+                  className="text-xs text-purple-400 hover:text-purple-300 font-semibold"
+                >
+                  Select All Visible
+                </button>
+                <button
+                  onClick={() => setSelectedArticles(new Set())}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            )}
 
             {/* Article List */}
             {loading ? (
@@ -530,8 +742,22 @@ export default function AdminPage() {
             ) : articles.length > 0 ? (
               <div className="space-y-3">
                 {articles.map((article) => (
-                  <div key={article.id} className="game-card p-4">
-                    <div className="flex items-start gap-4">
+                  <div key={article.id} className={`game-card p-4 transition-all ${selectedArticles.has(article.id) ? 'ring-1 ring-purple-500/50' : ''}`}>
+                    <div className="flex items-start gap-3">
+                      {/* Checkbox */}
+                      <button
+                        onClick={() => toggleSelectArticle(article.id)}
+                        className={`mt-1 h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
+                          selectedArticles.has(article.id)
+                            ? 'bg-purple-500 border-purple-500'
+                            : 'border-muted-foreground/30 hover:border-purple-500/50'
+                        }`}
+                      >
+                        {selectedArticles.has(article.id) && (
+                          <CheckCircle className="h-3 w-3 text-white" />
+                        )}
+                      </button>
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${getStatusBadge(article.status)}`}>
@@ -562,14 +788,14 @@ export default function AdminPage() {
                             <button onClick={() => handleReview(article.id)} title="Approve" className="p-1.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-all">
                               <CheckCircle className="h-4 w-4" />
                             </button>
-                            <button onClick={() => handleDelete(article.id)} title="Reject" className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all">
+                            <button onClick={() => handleDelete(article.id)} title="Reject & Delete" className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all">
                               <Trash2 className="h-4 w-4" />
                             </button>
                           </>
                         )}
                         {article.status === 'reviewed' && (
                           <button onClick={() => handlePublishNow(article.id)} title="Publish Now" className="p-1.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-all">
-                            <CheckCircle className="h-4 w-4" />
+                            <ArrowUpRight className="h-4 w-4" />
                           </button>
                         )}
                         <button
@@ -626,12 +852,11 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* AI Generate Tab */}
+        {/* ===== AI Generate Tab ===== */}
         {activeTab === 'generate' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: Generation Controls */}
             <div className="lg:col-span-1 space-y-4">
-              {/* Game Selection */}
               <div className="game-card p-5">
                 <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">SELECT GAME</h3>
                 <select
@@ -646,7 +871,6 @@ export default function AdminPage() {
                 </select>
               </div>
 
-              {/* Guide Type Selection */}
               <div className="game-card p-5">
                 <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">GUIDE TYPE</h3>
                 <div className="grid grid-cols-5 gap-1.5">
@@ -673,7 +897,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Custom Topic */}
               <div className="game-card p-5">
                 <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">CUSTOM TOPIC</h3>
                 <input
@@ -685,7 +908,6 @@ export default function AdminPage() {
                 />
               </div>
 
-              {/* Generate Buttons */}
               <div className="space-y-2">
                 <button
                   onClick={handleGenerate}
@@ -693,15 +915,9 @@ export default function AdminPage() {
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-purple-500/20 border border-purple-500/30 text-sm font-bold text-purple-400 hover:bg-purple-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {generating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Generating...
-                    </>
+                    <><Loader2 className="h-4 w-4 animate-spin" />Generating...</>
                   ) : (
-                    <>
-                      <Zap className="h-4 w-4" />
-                      Generate Single Guide
-                    </>
+                    <><Zap className="h-4 w-4" />Generate Single Guide</>
                   )}
                 </button>
 
@@ -711,20 +927,13 @@ export default function AdminPage() {
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-sm font-bold text-cyan-400 hover:bg-cyan-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {batchGenerating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Planning...
-                    </>
+                    <><Loader2 className="h-4 w-4 animate-spin" />Planning...</>
                   ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      Batch Generate (5 Articles)
-                    </>
+                    <><Sparkles className="h-4 w-4" />Batch Generate (5 Articles)</>
                   )}
                 </button>
               </div>
 
-              {/* Batch Plan */}
               {showBatchPlan && batchPlan.length > 0 && (
                 <div className="game-card p-5">
                   <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-3">BATCH PLAN</h3>
@@ -743,15 +952,9 @@ export default function AdminPage() {
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-green-500/20 border border-green-500/30 text-xs font-bold text-green-400 hover:bg-green-500/30 transition-all disabled:opacity-50"
                     >
                       {batchGenerating ? (
-                        <>
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          {batchProgress.current}/{batchProgress.total}
-                        </>
+                        <><Loader2 className="h-3 w-3 animate-spin" />{batchProgress.current}/{batchProgress.total}</>
                       ) : (
-                        <>
-                          <CheckCircle className="h-3 w-3" />
-                          Execute Batch
-                        </>
+                        <><CheckCircle className="h-3 w-3" />Execute Batch</>
                       )}
                     </button>
                     <button
@@ -764,7 +967,6 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Info Box */}
               <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
@@ -778,7 +980,6 @@ export default function AdminPage() {
 
             {/* Right: Topics & Trending */}
             <div className="lg:col-span-2 space-y-4">
-              {/* Trending Topics */}
               {trending.length > 0 && (
                 <div className="game-card p-5">
                   <div className="flex items-center gap-2 mb-4">
@@ -801,7 +1002,7 @@ export default function AdminPage() {
                           <p className="text-sm font-semibold text-foreground truncate">{t.topic}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="text-xs text-purple-400">{t.gameName}</span>
-                            <span className="text-xs text-muted-foreground">Priority: {'🔥'.repeat(Math.ceil(t.priority / 3))}</span>
+                            <span className="text-xs text-muted-foreground">Priority: {'\uD83D\uDD25'.repeat(Math.ceil(t.priority / 3))}</span>
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-1 max-w-[200px]">
@@ -817,7 +1018,6 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Available Topics */}
               {selectedGame && topics.length > 0 && (
                 <div className="game-card p-5">
                   <div className="flex items-center gap-2 mb-4">
@@ -851,7 +1051,6 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Empty state */}
               {!selectedGame && (
                 <div className="text-center py-16 text-muted-foreground">
                   <Gamepad2 className="h-12 w-12 mx-auto mb-4 opacity-30" />
@@ -863,18 +1062,101 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Schedule Tab */}
+        {/* ===== Schedule Tab ===== */}
         {activeTab === 'schedule' && (
           <div>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">PUBLISH QUEUE</h3>
+            {/* Daily Auto-Schedule Panel */}
+            <div className="game-card p-6 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Activity className="h-5 w-5 text-purple-400" />
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">DAILY AUTO-SCHEDULE</h3>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">Automatically schedule reviewed articles for publishing throughout the day.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">Articles per day</label>
+                  <select
+                    value={dailyCount}
+                    onChange={(e) => setDailyCount(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-purple-500/50"
+                  >
+                    {[1, 2, 3, 5, 8, 10].map(n => (
+                      <option key={n} value={n}>{n} articles</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">Start hour (24h)</label>
+                  <select
+                    value={dailyStartHour}
+                    onChange={(e) => setDailyStartHour(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-purple-500/50"
+                  >
+                    {[6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(h => (
+                      <option key={h} value={h}>{h}:00 UTC</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">Interval (hours)</label>
+                  <select
+                    value={dailyInterval}
+                    onChange={(e) => setDailyInterval(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-purple-500/50"
+                  >
+                    {[1, 2, 3, 4, 6].map(h => (
+                      <option key={h} value={h}>Every {h}h</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <button
-                onClick={handleProcessQueue}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-sm font-semibold text-green-400 hover:bg-green-500/20 transition-all"
+                onClick={handleDailySchedule}
+                disabled={schedulingDaily}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-500/20 border border-purple-500/30 text-sm font-bold text-purple-400 hover:bg-purple-500/30 transition-all disabled:opacity-50"
               >
-                <RefreshCw className="h-4 w-4" />
-                Process Due Items
+                {schedulingDaily ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" />Scheduling...</>
+                ) : (
+                  <><Calendar className="h-4 w-4" />Auto-Schedule Now</>
+                )}
               </button>
+            </div>
+
+            {/* Schedule Stats */}
+            {scheduleStats && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                <div className="game-card p-4 text-center">
+                  <p className="text-2xl font-black font-display text-foreground">{scheduleStats.today_scheduled}</p>
+                  <p className="text-xs text-muted-foreground">Scheduled Today</p>
+                </div>
+                <div className="game-card p-4 text-center">
+                  <p className="text-2xl font-black font-display text-green-400">{scheduleStats.today_published}</p>
+                  <p className="text-xs text-muted-foreground">Published Today</p>
+                </div>
+                <div className="game-card p-4 text-center">
+                  <p className="text-2xl font-black font-display text-amber-400">{scheduleStats.pending}</p>
+                  <p className="text-xs text-muted-foreground">Pending</p>
+                </div>
+                <div className="game-card p-4 text-center">
+                  <p className="text-2xl font-black font-display text-red-400">{scheduleStats.failed}</p>
+                  <p className="text-xs text-muted-foreground">Failed</p>
+                </div>
+              </div>
+            )}
+
+            {/* Queue Actions */}
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">PUBLISH QUEUE ({queue.length} items)</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleProcessQueue}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-sm font-semibold text-green-400 hover:bg-green-500/20 transition-all"
+                >
+                  <Play className="h-4 w-4" />
+                  Process Due Items
+                </button>
+              </div>
             </div>
 
             {queue.length > 0 ? (
@@ -882,16 +1164,35 @@ export default function AdminPage() {
                 {queue.map((item) => (
                   <div key={item.id} className="game-card p-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{item.article_title}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">{item.article_title}</p>
                         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{new Date(item.scheduled_at).toLocaleString()}</span>
                           <span>Attempts: {item.attempts}</span>
                         </div>
                       </div>
-                      <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-bold ${getQueueStatusBadge(item.status)}`}>
-                        {item.status.toUpperCase()}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0 ml-3">
+                        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-bold ${getQueueStatusBadge(item.status)}`}>
+                          {item.status.toUpperCase()}
+                        </span>
+                        {item.status === 'failed' && (
+                          <button
+                            onClick={async () => {
+                              // Reset failed item for retry
+                              await fetch('/api/schedule', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ articleId: item.article_id, scheduledAt: new Date().toISOString() }),
+                              });
+                              fetchQueue();
+                            }}
+                            className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-all"
+                            title="Retry"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -900,7 +1201,7 @@ export default function AdminPage() {
               <div className="text-center py-12 text-muted-foreground">
                 <Calendar className="h-10 w-10 mx-auto mb-3 opacity-50" />
                 <p className="font-semibold">Queue is empty</p>
-                <p className="text-sm mt-1">Review and schedule articles from the Articles tab.</p>
+                <p className="text-sm mt-1">Review and schedule articles from the Review tab, or use Daily Auto-Schedule above.</p>
               </div>
             )}
           </div>
@@ -911,9 +1212,9 @@ export default function AdminPage() {
 }
 
 // ===== STAT CARD COMPONENT =====
-function StatCard({ icon: Icon, label, value, color }: { icon: React.ComponentType<{ className?: string }>; label: string; value: number; color: string }) {
+function StatCard({ icon: Icon, label, value, color, highlight }: { icon: React.ComponentType<{ className?: string }>; label: string; value: number | string; color: string; highlight?: boolean }) {
   return (
-    <div className="game-card p-5">
+    <div className={`game-card p-5 ${highlight ? 'ring-1 ring-amber-500/30' : ''}`}>
       <div className="flex items-center gap-3">
         <div className={`p-2 rounded-lg bg-card ${color}`}>
           <Icon className="h-5 w-5" />

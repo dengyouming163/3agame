@@ -29,8 +29,8 @@ export async function GET() {
     // Get recent articles with game info
     const recentResult = await query(
       `SELECT a.id, a.game_id, a.title, a.slug, a.summary, a.status, a.author,
-        a.published_at, a.created_at,
-        g.name as game_name
+        a.published_at, a.created_at, a.keywords,
+        g.name as game_name, g.slug as game_slug
        FROM articles a
        LEFT JOIN games g ON a.game_id = g.id
        ORDER BY a.created_at DESC
@@ -61,6 +61,68 @@ export async function GET() {
     );
     const weekGenerated = weekResult.rows[0]?.count || 0;
 
+    // Generation success rate (from generation_logs)
+    const genStatsResult = await query(
+      `SELECT
+        COUNT(*)::int as total_generated,
+        COUNT(*) FILTER (WHERE article_id IS NOT NULL)::int as successful
+       FROM generation_logs
+       WHERE generated_at >= DATE_TRUNC('week', CURRENT_DATE)`
+    );
+    const genStats = genStatsResult.rows[0] || { total_generated: 0, successful: 0 };
+    const generationSuccessRate = genStats.total_generated > 0
+      ? Math.round((genStats.successful / genStats.total_generated) * 100)
+      : 100;
+
+    // Publishing trend: last 7 days
+    const trendResult = await query(
+      `SELECT
+        DATE(published_at) as date,
+        COUNT(*)::int as published_count
+       FROM articles
+       WHERE published_at >= CURRENT_DATE - INTERVAL '7 days'
+       GROUP BY DATE(published_at)
+       ORDER BY date ASC`
+    );
+    const publishTrend = trendResult.rows.map((row: { date: string; published_count: number }) => ({
+      date: row.date,
+      count: row.published_count,
+    }));
+
+    // Generation trend: last 7 days
+    const genTrendResult = await query(
+      `SELECT
+        DATE(created_at) as date,
+        COUNT(*)::int as generated_count
+       FROM articles
+       WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+       GROUP BY DATE(created_at)
+       ORDER BY date ASC`
+    );
+    const generationTrend = genTrendResult.rows.map((row: { date: string; generated_count: number }) => ({
+      date: row.date,
+      count: row.generated_count,
+    }));
+
+    // Articles needing review
+    const reviewResult = await query(
+      `SELECT COUNT(*)::int as count FROM articles WHERE status = 'generated'`
+    );
+    const pendingReview = reviewResult.rows[0]?.count || 0;
+
+    // Articles ready to publish
+    const readyResult = await query(
+      `SELECT COUNT(*)::int as count FROM articles WHERE status = 'reviewed'`
+    );
+    const readyToPublish = readyResult.rows[0]?.count || 0;
+
+    // Scheduled for today
+    const todayScheduleResult = await query(
+      `SELECT COUNT(*)::int as count FROM publish_queue
+       WHERE status = 'pending' AND scheduled_at >= CURRENT_DATE AND scheduled_at < CURRENT_DATE + INTERVAL '1 day'`
+    );
+    const scheduledToday = todayScheduleResult.rows[0]?.count || 0;
+
     return NextResponse.json({
       stats: {
         totalArticles,
@@ -69,9 +131,15 @@ export async function GET() {
         queueByStatus,
         todayPublished,
         weekGenerated,
+        generationSuccessRate,
+        pendingReview,
+        readyToPublish,
+        scheduledToday,
       },
       topGames: topGamesResult.rows,
       recentArticles: recentResult.rows,
+      publishTrend,
+      generationTrend,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
