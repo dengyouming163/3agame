@@ -1,9 +1,9 @@
 import type { MetadataRoute } from 'next';
-import { getBaseUrl } from '@/lib/utils';
+import { getSiteUrl } from '@/lib/utils';
 import { query } from '@/lib/db';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = getBaseUrl();
+  const baseUrl = getSiteUrl();
 
   const staticPages: MetadataRoute.Sitemap = [
     {

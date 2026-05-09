@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Swords, ArrowLeft, Clock, Share2, Tag, BookOpen } from 'lucide-react';
 import { formatDate, stripHtml } from '@/lib/game-utils';
-import { getBaseUrl } from '@/lib/utils';
+import { getBaseUrl, getSiteUrl } from '@/lib/utils';
 import type { Metadata } from 'next';
 
 interface PageProps {
@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         title: article.meta_title || article.title,
         description: article.meta_description || article.summary,
         type: 'article',
-        url: `${getBaseUrl()}/guides/${slug}`,
+        url: `${getSiteUrl()}/guides/${slug}`,
         images: article.cover_image_url ? [{ url: article.cover_image_url, width: 1200, height: 630 }] : undefined,
         publishedTime: article.published_at,
         authors: [article.author || '3A Game Master'],
