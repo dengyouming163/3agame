@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import './globals.css';
 import Link from 'next/link';
 import { Swords, Gamepad2, Shield, Map as MapIcon, Lightbulb } from 'lucide-react';
@@ -166,7 +167,9 @@ export default function RootLayout({
         </header>
 
         {/* Page View Tracker (admin/api pages excluded) */}
-        <PageTracker />
+        <Suspense fallback={null}>
+          <PageTracker />
+        </Suspense>
 
         {/* Main Content */}
         <main>{children}</main>
