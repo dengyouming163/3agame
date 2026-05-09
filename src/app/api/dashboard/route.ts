@@ -13,6 +13,12 @@ export async function GET() {
     }
     const totalArticles = Object.values(articlesByStatus).reduce((a, b) => a + b, 0);
 
+    // Status distribution for charts
+    const statusDistribution = Object.entries(articlesByStatus).map(([status, count]) => ({
+      status,
+      count,
+    }));
+
     // Get total games count
     const gamesResult = await query('SELECT COUNT(*)::int as count FROM games');
     const totalGames = gamesResult.rows[0]?.count || 0;
@@ -74,7 +80,7 @@ export async function GET() {
       ? Math.round((genStats.successful / genStats.total_generated) * 100)
       : 100;
 
-    // Publishing trend: last 7 days
+    // Publishing trend: last 7 days (fill gaps with 0)
     const trendResult = await query(
       `SELECT
         DATE(published_at) as date,
@@ -84,12 +90,19 @@ export async function GET() {
        GROUP BY DATE(published_at)
        ORDER BY date ASC`
     );
-    const publishTrend = trendResult.rows.map((row: { date: string; published_count: number }) => ({
-      date: row.date,
-      count: row.published_count,
-    }));
+    const publishTrendMap = new Map<string, number>();
+    for (const row of trendResult.rows) {
+      publishTrendMap.set(row.date, row.published_count);
+    }
+    const publishTrend = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      publishTrend.push({ date: dateStr, count: publishTrendMap.get(dateStr) || 0 });
+    }
 
-    // Generation trend: last 7 days
+    // Generation trend: last 7 days (fill gaps with 0)
     const genTrendResult = await query(
       `SELECT
         DATE(created_at) as date,
@@ -99,10 +112,17 @@ export async function GET() {
        GROUP BY DATE(created_at)
        ORDER BY date ASC`
     );
-    const generationTrend = genTrendResult.rows.map((row: { date: string; generated_count: number }) => ({
-      date: row.date,
-      count: row.generated_count,
-    }));
+    const genTrendMap = new Map<string, number>();
+    for (const row of genTrendResult.rows) {
+      genTrendMap.set(row.date, row.generated_count);
+    }
+    const generationTrend = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      generationTrend.push({ date: dateStr, count: genTrendMap.get(dateStr) || 0 });
+    }
 
     // Articles needing review
     const reviewResult = await query(
@@ -121,7 +141,7 @@ export async function GET() {
       `SELECT COUNT(*)::int as count FROM publish_queue
        WHERE status = 'pending' AND scheduled_at >= CURRENT_DATE AND scheduled_at < CURRENT_DATE + INTERVAL '1 day'`
     );
-    const scheduledToday = todayScheduleResult.rows[0]?.count || 0;
+    const todayScheduled = todayScheduleResult.rows[0]?.count || 0;
 
     return NextResponse.json({
       stats: {
@@ -134,8 +154,9 @@ export async function GET() {
         generationSuccessRate,
         pendingReview,
         readyToPublish,
-        scheduledToday,
+        todayScheduled,
       },
+      statusDistribution,
       topGames: topGamesResult.rows,
       recentArticles: recentResult.rows,
       publishTrend,

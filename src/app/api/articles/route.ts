@@ -6,6 +6,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const gameId = searchParams.get('gameId');
+    const type = searchParams.get('type');
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 100);
     const offset = (page - 1) * limit;
@@ -22,6 +23,24 @@ export async function GET(request: NextRequest) {
     if (gameId) {
       conditions.push(`a.game_id = $${paramIdx++}`);
       params.push(parseInt(gameId, 10));
+    }
+    if (type) {
+      // Search in keywords array for guide type
+      const typeMap: Record<string, string[]> = {
+        boss: ['boss', 'fight', 'defeat', 'strategy', 'malenia', 'radahn'],
+        build: ['build', 'class', 'loadout', 'weapon', 'gear', 'stat'],
+        collectible: ['collectible', 'collect', 'location', 'find', 'item', 'armor'],
+        walkthrough: ['walkthrough', 'guide', 'progress', 'chapter', 'mission', 'quest', 'complete'],
+        tips: ['tip', 'trick', 'secret', 'hint', 'advice', 'hidden'],
+      };
+      const searchTerms = typeMap[type.toLowerCase()] || [type.toLowerCase()];
+      const orConditions = searchTerms.map(term => {
+        const p1 = paramIdx++;
+        const p2 = paramIdx++;
+        params.push(term, `%${term}%`);
+        return `($${p1} = ANY(a.keywords) OR a.title ILIKE $${p2})`;
+      });
+      conditions.push(`(${orConditions.join(' OR ')})`);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

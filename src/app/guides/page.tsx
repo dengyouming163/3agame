@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Swords, Shield, Map, Gamepad2, Lightbulb, Clock, Filter } from 'lucide-react';
+import { Swords, Shield, MapIcon, Gamepad2, Lightbulb, Clock, Filter } from 'lucide-react';
 import { formatDate, stripHtml, truncateText } from '@/lib/game-utils';
 import type { Metadata } from 'next';
 
@@ -28,27 +28,11 @@ async function getArticles(type?: string): Promise<Article[]> {
   try {
     const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT || 'http://localhost:5000';
     const protocol = domain.startsWith('http') ? '' : 'https://';
-    const res = await fetch(`${protocol}${domain}/api/articles?status=published&limit=50`, { cache: 'no-store' });
+    const typeParam = type ? `&type=${type}` : '';
+    const res = await fetch(`${protocol}${domain}/api/articles?status=published&limit=50${typeParam}`, { cache: 'no-store' });
     if (!res.ok) return [];
     const data = await res.json();
-    let articles: Article[] = data.articles || [];
-
-    // Client-side filter by type based on keywords
-    if (type) {
-      articles = articles.filter((a) => {
-        const kw = (a.keywords || []).join(' ').toLowerCase();
-        switch (type) {
-          case 'boss': return kw.includes('boss') || kw.includes('fight') || kw.includes('defeat') || kw.includes('battle');
-          case 'build': return kw.includes('build') || kw.includes('class') || kw.includes('loadout') || kw.includes('weapon');
-          case 'collectible': return kw.includes('collect') || kw.includes('location') || kw.includes('find') || kw.includes('hidden');
-          case 'walkthrough': return kw.includes('walkthrough') || kw.includes('guide') || kw.includes('progression');
-          case 'tips': return kw.includes('tip') || kw.includes('trick') || kw.includes('secret') || kw.includes('strategy');
-          default: return true;
-        }
-      });
-    }
-
-    return articles;
+    return data.articles || [];
   } catch {
     return [];
   }
@@ -68,7 +52,7 @@ const FILTER_TABS = [
   { type: '', label: 'All Guides', icon: Filter },
   { type: 'boss', label: 'Boss Guides', icon: Swords },
   { type: 'build', label: 'Builds', icon: Shield },
-  { type: 'collectible', label: 'Collectibles', icon: Map },
+  { type: 'collectible', label: 'Collectibles', icon: MapIcon },
   { type: 'walkthrough', label: 'Walkthroughs', icon: Gamepad2 },
   { type: 'tips', label: 'Tips & Tricks', icon: Lightbulb },
 ];

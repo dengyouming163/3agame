@@ -201,7 +201,7 @@ export default function RootLayout({
               </div>
             </div>
             <div className="mt-10 pt-6 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
-              <p className="text-xs text-muted-foreground">&copy; 2024 3A Game Master. All rights reserved.</p>
+              <p className="text-xs text-muted-foreground">&copy; 2025 3A Game Master. All rights reserved.</p>
               <p className="text-xs text-muted-foreground">Not affiliated with any game publishers. All game names are trademarks of their respective owners.</p>
             </div>
           </div>

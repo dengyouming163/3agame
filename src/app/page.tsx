@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Swords, Shield, Map, Gamepad2, Lightbulb, ChevronRight, Flame, Clock, TrendingUp } from 'lucide-react';
+import { Swords, Shield, MapIcon, Gamepad2, Lightbulb, ChevronRight, Flame, Clock, TrendingUp } from 'lucide-react';
 import { formatDate, stripHtml, truncateText } from '@/lib/game-utils';
 
 interface Article {
@@ -90,7 +90,7 @@ export default async function HomePage() {
             {[
               { href: '/guides?type=boss', label: 'Boss Guides', icon: Swords, color: 'border-red-500/40 text-red-400 hover:bg-red-500/10' },
               { href: '/guides?type=build', label: 'Builds', icon: Shield, color: 'border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/10' },
-              { href: '/guides?type=collectible', label: 'Collectibles', icon: Map, color: 'border-amber-500/40 text-amber-400 hover:bg-amber-500/10' },
+              { href: '/guides?type=collectible', label: 'Collectibles', icon: MapIcon, color: 'border-amber-500/40 text-amber-400 hover:bg-amber-500/10' },
               { href: '/guides?type=walkthrough', label: 'Walkthroughs', icon: Gamepad2, color: 'border-purple-500/40 text-purple-400 hover:bg-purple-500/10' },
               { href: '/guides?type=tips', label: 'Tips & Tricks', icon: Lightbulb, color: 'border-green-500/40 text-green-400 hover:bg-green-500/10' },
             ].map((cat) => (

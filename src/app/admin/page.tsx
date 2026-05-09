@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Swords, Shield, Map, Gamepad2, Lightbulb, BarChart3, FileText, Zap, Calendar, Trash2, Eye, CheckCircle, RefreshCw, Clock, TrendingUp, BookOpen, AlertCircle, ChevronDown, ChevronRight, Loader2, ImagePlus, Flame, Sparkles, ListChecks, Play, CheckCheck, XCircle, Activity, Target, ArrowUpRight } from 'lucide-react';
+import { Swords, Shield, MapIcon, Gamepad2, Lightbulb, BarChart3, FileText, Zap, Calendar, Trash2, Eye, CheckCircle, RefreshCw, Clock, TrendingUp, BookOpen, AlertCircle, ChevronDown, ChevronRight, Loader2, ImagePlus, Flame, Sparkles, ListChecks, Play, CheckCheck, XCircle, Activity, Target, ArrowUpRight } from 'lucide-react';
 
 // ===== TYPES =====
 interface Article {
@@ -49,7 +49,7 @@ interface DashboardStats {
   generationSuccessRate: number;
   pendingReview: number;
   readyToPublish: number;
-  scheduledToday: number;
+  todayScheduled: number;
 }
 
 interface TopGame {
@@ -535,7 +535,7 @@ export default function AdminPage() {
             {/* Second Row: Rate + Schedule */}
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
               <StatCard icon={Activity} label="Success Rate" value={`${stats.generationSuccessRate}%`} color="text-green-400" />
-              <StatCard icon={Calendar} label="Scheduled Today" value={stats.scheduledToday} color="text-amber-400" />
+              <StatCard icon={Calendar} label="Scheduled Today" value={stats.todayScheduled} color="text-amber-400" />
               <StatCard icon={Gamepad2} label="Total Games" value={stats.totalGames} color="text-amber-400" />
             </div>
 
@@ -546,16 +546,20 @@ export default function AdminPage() {
                 <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">PUBLISH TREND (7 DAYS)</h3>
                 {publishTrend.length > 0 ? (
                   <div className="flex items-end gap-2 h-32">
-                    {publishTrend.map((item, i) => (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                        <span className="text-xs text-green-400 font-bold">{item.count}</span>
-                        <div
-                          className="w-full rounded-t bg-gradient-to-t from-green-600 to-green-400 transition-all"
-                          style={{ height: `${Math.max(item.count * 20, 4)}px` }}
-                        />
-                        <span className="text-[10px] text-muted-foreground">{item.date.slice(5)}</span>
-                      </div>
-                    ))}
+                    {publishTrend.map((item, i) => {
+                      const maxCount = Math.max(...publishTrend.map(t => t.count), 1);
+                      const height = Math.max((item.count / maxCount) * 100, 4);
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-xs text-green-400 font-bold">{item.count}</span>
+                          <div
+                            className="w-full rounded-t bg-gradient-to-t from-green-600 to-green-400 transition-all"
+                            style={{ height: `${height}%` }}
+                          />
+                          <span className="text-[10px] text-muted-foreground">{item.date.slice(5)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-8">No publish data yet</p>
@@ -567,16 +571,20 @@ export default function AdminPage() {
                 <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">GENERATION TREND (7 DAYS)</h3>
                 {generationTrend.length > 0 ? (
                   <div className="flex items-end gap-2 h-32">
-                    {generationTrend.map((item, i) => (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                        <span className="text-xs text-cyan-400 font-bold">{item.count}</span>
-                        <div
-                          className="w-full rounded-t bg-gradient-to-t from-cyan-600 to-cyan-400 transition-all"
-                          style={{ height: `${Math.max(item.count * 20, 4)}px` }}
-                        />
-                        <span className="text-[10px] text-muted-foreground">{item.date.slice(5)}</span>
-                      </div>
-                    ))}
+                    {generationTrend.map((item, i) => {
+                      const maxCount = Math.max(...generationTrend.map(t => t.count), 1);
+                      const height = Math.max((item.count / maxCount) * 100, 4);
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                          <span className="text-xs text-cyan-400 font-bold">{item.count}</span>
+                          <div
+                            className="w-full rounded-t bg-gradient-to-t from-cyan-600 to-cyan-400 transition-all"
+                            style={{ height: `${height}%` }}
+                          />
+                          <span className="text-[10px] text-muted-foreground">{item.date.slice(5)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center py-8">No generation data yet</p>
