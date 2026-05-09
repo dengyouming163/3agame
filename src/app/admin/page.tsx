@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Swords, Shield, MapIcon, Gamepad2, Lightbulb, BarChart3, FileText, Zap, Calendar, Trash2, Eye, CheckCircle, RefreshCw, Clock, TrendingUp, BookOpen, AlertCircle, ChevronDown, ChevronRight, Loader2, ImagePlus, Flame, Sparkles, ListChecks, Play, CheckCheck, XCircle, Activity, Target, ArrowUpRight } from 'lucide-react';
+import { Swords, Shield, MapIcon, Gamepad2, Lightbulb, BarChart3, FileText, Zap, Calendar, Trash2, Eye, CheckCircle, RefreshCw, Clock, TrendingUp, BookOpen, AlertCircle, ChevronDown, ChevronRight, Loader2, ImagePlus, Flame, Sparkles, ListChecks, Play, CheckCheck, XCircle, Activity, Target, ArrowUpRight, Lock } from 'lucide-react';
 
 // ===== TYPES =====
 interface Article {
@@ -11,6 +11,7 @@ interface Article {
   slug: string;
   content: string;
   summary: string | null;
+  cover_image_url?: string | null;
   status: string;
   keywords: string[] | null;
   author: string;
@@ -102,10 +103,10 @@ interface TrendItem {
 
 // ===== TAB CONFIG =====
 const TABS = [
-  { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-  { id: 'articles', label: 'Review', icon: FileText },
-  { id: 'generate', label: 'AI Generate', icon: Zap },
-  { id: 'schedule', label: 'Schedule', icon: Calendar },
+  { id: 'dashboard', label: '数据概览', icon: BarChart3 },
+  { id: 'articles', label: '内容审核', icon: FileText },
+  { id: 'generate', label: 'AI生成', icon: Zap },
+  { id: 'schedule', label: '发布调度', icon: Calendar },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -121,6 +122,16 @@ function getStatusBadge(status: string) {
   return map[status] || 'status-draft';
 }
 
+function getStatusLabel(status: string) {
+  const map: Record<string, string> = {
+    draft: '草稿',
+    generated: '已生成',
+    reviewed: '已审核',
+    published: '已发布',
+  };
+  return map[status] || status;
+}
+
 function getQueueStatusBadge(status: string) {
   const map: Record<string, string> = {
     pending: 'status-generated',
@@ -129,6 +140,16 @@ function getQueueStatusBadge(status: string) {
     failed: 'badge-boss',
   };
   return map[status] || 'status-draft';
+}
+
+function getQueueStatusLabel(status: string) {
+  const map: Record<string, string> = {
+    pending: '等待中',
+    publishing: '发布中',
+    published: '已发布',
+    failed: '失败',
+  };
+  return map[status] || status;
 }
 
 function getGuideTypeIcon(type: string) {
@@ -142,8 +163,25 @@ function getGuideTypeIcon(type: string) {
   return map[type] || '\uD83D\uDCDD';
 }
 
+function getGuideTypeLabel(type: string) {
+  const map: Record<string, string> = {
+    boss: 'Boss攻略',
+    build: 'Build配装',
+    collectible: '收集指南',
+    walkthrough: '流程攻略',
+    tips: '技巧提示',
+  };
+  return map[type] || type;
+}
+
 // ===== MAIN COMPONENT =====
 export default function AdminPage() {
+  // Auth state
+  const [authenticated, setAuthenticated] = useState(false);
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [topGames, setTopGames] = useState<TopGame[]>([]);
@@ -180,6 +218,41 @@ export default function AdminPage() {
   const [dailyStartHour, setDailyStartHour] = useState(9);
   const [dailyInterval, setDailyInterval] = useState(3);
   const [schedulingDaily, setSchedulingDaily] = useState(false);
+
+  // Check login on mount
+  useEffect(() => {
+    const isAuth = sessionStorage.getItem('admin_auth');
+    if (isAuth === 'true') setAuthenticated(true);
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginPassword) return;
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: loginPassword }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        sessionStorage.setItem('admin_auth', 'true');
+        setAuthenticated(true);
+      } else {
+        setLoginError('密码错误，请重试');
+      }
+    } catch {
+      setLoginError('登录失败，请检查网络');
+    }
+    setLoginLoading(false);
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('admin_auth');
+    setAuthenticated(false);
+  };
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -246,11 +319,13 @@ export default function AdminPage() {
   }, [guideType]);
 
   useEffect(() => {
+    if (!authenticated) return;
     fetchDashboard();
     fetchGames();
-  }, [fetchDashboard, fetchGames]);
+  }, [authenticated, fetchDashboard, fetchGames]);
 
   useEffect(() => {
+    if (!authenticated) return;
     if (activeTab === 'articles') fetchArticles();
     if (activeTab === 'schedule') fetchQueue();
     if (activeTab === 'dashboard') fetchDashboard();
@@ -258,7 +333,7 @@ export default function AdminPage() {
       const game = games.find(g => g.id.toString() === selectedGame);
       if (game) fetchTopics(game.slug);
     }
-  }, [activeTab, fetchArticles, fetchQueue, fetchDashboard, fetchTopics, selectedGame, games]);
+  }, [activeTab, fetchArticles, fetchQueue, fetchDashboard, fetchTopics, selectedGame, games, authenticated]);
 
   // ===== ACTIONS =====
   const handleReview = async (articleId: number) => {
@@ -280,14 +355,15 @@ export default function AdminPage() {
   };
 
   const handleDelete = async (articleId: number) => {
-    if (!confirm('Delete this article?')) return;
+    if (!confirm('确定要删除这篇文章吗？')) return;
     const res = await fetch(`/api/articles/${articleId}`, { method: 'DELETE' });
     if (res.ok) { fetchArticles(); fetchDashboard(); }
   };
 
   const handleBatchAction = async (action: 'review' | 'publish' | 'delete') => {
     if (selectedArticles.size === 0) return;
-    if (action === 'delete' && !confirm(`Delete ${selectedArticles.size} articles?`)) return;
+    const actionLabels = { review: '审核', publish: '发布', delete: '删除' };
+    if (action === 'delete' && !confirm(`确定要删除 ${selectedArticles.size} 篇文章吗？`)) return;
 
     setBatchActionLoading(true);
     try {
@@ -302,10 +378,10 @@ export default function AdminPage() {
         fetchArticles();
         fetchDashboard();
         fetchQueue();
-        alert(`${action.charAt(0).toUpperCase() + action.slice(1)}d ${data.affected} article(s)`);
+        alert(`已${actionLabels[action]} ${data.affected} 篇文章`);
       }
     } catch (e) {
-      alert('Batch action failed');
+      alert('批量操作失败');
       console.error(e);
     }
     setBatchActionLoading(false);
@@ -327,7 +403,7 @@ export default function AdminPage() {
   };
 
   const handleGenerate = async () => {
-    if (!selectedGame) return alert('Select a game first');
+    if (!selectedGame) return alert('请先选择游戏');
     setGenerating(true);
     try {
       const body: Record<string, unknown> = { gameId: parseInt(selectedGame) };
@@ -341,15 +417,15 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (data.success) {
-        alert(`Generated: "${data.article.title}" (${data.article.guideType || 'guide'})`);
+        alert(`生成成功："${data.article.title}" (${getGuideTypeLabel(data.article.guideType || 'guide')})`);
         fetchArticles();
         const game = games.find(g => g.id.toString() === selectedGame);
         if (game) fetchTopics(game.slug);
       } else {
-        alert(`Error: ${data.error}`);
+        alert(`生成失败：${data.error}`);
       }
     } catch (e) {
-      alert('Generation failed');
+      alert('生成失败');
       console.error(e);
     }
     setGenerating(false);
@@ -365,19 +441,20 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (data.success) {
-        alert('Image generated and saved!');
+        alert('封面图生成成功！');
+        fetchArticles();
       } else {
-        alert(`Error: ${data.error}`);
+        alert(`生成失败：${data.error}`);
       }
     } catch (e) {
-      alert('Image generation failed');
+      alert('图片生成失败');
       console.error(e);
     }
     setGeneratingImage(null);
   };
 
   const handleSchedule = async (articleId: number) => {
-    if (!scheduleDate) return alert('Select a date');
+    if (!scheduleDate) return alert('请选择发布时间');
     const res = await fetch('/api/schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -389,7 +466,7 @@ export default function AdminPage() {
       fetchQueue();
       fetchArticles();
     } else {
-      alert(`Error: ${data.error}`);
+      alert(`调度失败：${data.error}`);
     }
   };
 
@@ -407,10 +484,10 @@ export default function AdminPage() {
         fetchQueue();
         fetchDashboard();
       } else {
-        alert(`Error: ${data.error}`);
+        alert(`调度失败：${data.error}`);
       }
     } catch (e) {
-      alert('Daily scheduling failed');
+      alert('每日调度失败');
       console.error(e);
     }
     setSchedulingDaily(false);
@@ -420,7 +497,7 @@ export default function AdminPage() {
     const res = await fetch('/api/publish', { method: 'POST' });
     const data = await res.json();
     if (data.success) {
-      alert(`Published ${data.published} article(s)`);
+      alert(`已发布 ${data.published} 篇文章`);
       fetchQueue();
       fetchArticles();
       fetchDashboard();
@@ -430,7 +507,7 @@ export default function AdminPage() {
   // ===== BATCH GENERATE =====
   const handlePlanBatch = async () => {
     const game = games.find(g => g.id.toString() === selectedGame);
-    if (!game) return alert('Select a game first');
+    if (!game) return alert('请先选择游戏');
 
     setBatchGenerating(true);
     try {
@@ -444,10 +521,10 @@ export default function AdminPage() {
         setBatchPlan(data.plannedArticles);
         setShowBatchPlan(true);
       } else {
-        alert(data.message || 'No topics available');
+        alert(data.message || '没有可用的话题');
       }
     } catch (e) {
-      alert('Batch planning failed');
+      alert('批量规划失败');
       console.error(e);
     }
     setBatchGenerating(false);
@@ -477,7 +554,7 @@ export default function AdminPage() {
     }
 
     const successCount = results.filter(r => r.success).length;
-    alert(`Batch complete: ${successCount}/${results.length} articles generated`);
+    alert(`批量生成完成：${successCount}/${results.length} 篇成功`);
     setBatchPlan([]);
     setShowBatchPlan(false);
     fetchArticles();
@@ -486,14 +563,66 @@ export default function AdminPage() {
     setBatchGenerating(false);
   };
 
-  // ===== RENDER =====
+  // ===== LOGIN SCREEN =====
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="w-full max-w-sm">
+          <div className="game-card p-8">
+            <div className="flex flex-col items-center mb-8">
+              <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/30 mb-4">
+                <Lock className="h-8 w-8 text-purple-400" />
+              </div>
+              <h1 className="text-xl font-black font-display gradient-text">3AGAME 管理后台</h1>
+              <p className="text-xs text-muted-foreground mt-2">请输入管理员密码</p>
+            </div>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(e) => { setLoginPassword(e.target.value); setLoginError(''); }}
+                placeholder="输入密码"
+                className="w-full px-4 py-3 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-purple-500/50 placeholder:text-muted-foreground/50"
+                autoFocus
+              />
+              {loginError && (
+                <p className="text-xs text-red-400 text-center">{loginError}</p>
+              )}
+              <button
+                type="submit"
+                disabled={loginLoading || !loginPassword}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-purple-500/20 border border-purple-500/30 text-sm font-bold text-purple-400 hover:bg-purple-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loginLoading ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" />验证中...</>
+                ) : (
+                  <><Lock className="h-4 w-4" />登录</>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== MAIN ADMIN UI =====
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-8">
-          <Swords className="h-7 w-7 text-purple-400" />
-          <h1 className="text-2xl font-black font-display gradient-text">COMMAND CENTER</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <Swords className="h-7 w-7 text-purple-400" />
+            <h1 className="text-2xl font-black font-display gradient-text">管理后台</h1>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card border border-border text-xs font-semibold text-muted-foreground hover:text-foreground transition-all"
+          >
+            <Lock className="h-3.5 w-3.5" />
+            退出登录
+          </button>
         </div>
 
         {/* Tabs */}
@@ -520,30 +649,30 @@ export default function AdminPage() {
           })}
         </div>
 
-        {/* ===== Dashboard Tab ===== */}
+        {/* ===== 数据概览 Tab ===== */}
         {activeTab === 'dashboard' && stats && (
           <div>
-            {/* Quick Stats Row */}
+            {/* 快速统计 */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-              <StatCard icon={BookOpen} label="Total Articles" value={stats.totalArticles} color="text-purple-400" />
-              <StatCard icon={Target} label="Pending Review" value={stats.pendingReview} color="text-amber-400" highlight={stats.pendingReview > 0} />
-              <StatCard icon={CheckCircle} label="Ready to Publish" value={stats.readyToPublish} color="text-cyan-400" />
-              <StatCard icon={TrendingUp} label="Today Published" value={stats.todayPublished} color="text-green-400" />
-              <StatCard icon={Zap} label="This Week Generated" value={stats.weekGenerated} color="text-cyan-400" />
+              <StatCard icon={BookOpen} label="文章总数" value={stats.totalArticles} color="text-purple-400" />
+              <StatCard icon={Target} label="待审核" value={stats.pendingReview} color="text-amber-400" highlight={stats.pendingReview > 0} />
+              <StatCard icon={CheckCircle} label="待发布" value={stats.readyToPublish} color="text-cyan-400" />
+              <StatCard icon={TrendingUp} label="今日发布" value={stats.todayPublished} color="text-green-400" />
+              <StatCard icon={Zap} label="本周生成" value={stats.weekGenerated} color="text-cyan-400" />
             </div>
 
-            {/* Second Row: Rate + Schedule */}
+            {/* 第二行 */}
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-              <StatCard icon={Activity} label="Success Rate" value={`${stats.generationSuccessRate}%`} color="text-green-400" />
-              <StatCard icon={Calendar} label="Scheduled Today" value={stats.todayScheduled} color="text-amber-400" />
-              <StatCard icon={Gamepad2} label="Total Games" value={stats.totalGames} color="text-amber-400" />
+              <StatCard icon={Activity} label="生成成功率" value={`${stats.generationSuccessRate}%`} color="text-green-400" />
+              <StatCard icon={Calendar} label="今日调度" value={stats.todayScheduled} color="text-amber-400" />
+              <StatCard icon={Gamepad2} label="游戏总数" value={stats.totalGames} color="text-amber-400" />
             </div>
 
-            {/* Charts Row */}
+            {/* 趋势图 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              {/* Publish Trend */}
+              {/* 发布趋势 */}
               <div className="game-card p-6">
-                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">PUBLISH TREND (7 DAYS)</h3>
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">发布趋势（近7天）</h3>
                 {publishTrend.length > 0 ? (
                   <div className="flex items-end gap-2 h-32">
                     {publishTrend.map((item, i) => {
@@ -562,13 +691,13 @@ export default function AdminPage() {
                     })}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">No publish data yet</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">暂无发布数据</p>
                 )}
               </div>
 
-              {/* Generation Trend */}
+              {/* 生成趋势 */}
               <div className="game-card p-6">
-                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">GENERATION TREND (7 DAYS)</h3>
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">生成趋势（近7天）</h3>
                 {generationTrend.length > 0 ? (
                   <div className="flex items-end gap-2 h-32">
                     {generationTrend.map((item, i) => {
@@ -587,20 +716,20 @@ export default function AdminPage() {
                     })}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">No generation data yet</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">暂无生成数据</p>
                 )}
               </div>
             </div>
 
-            {/* Status + Top Games */}
+            {/* 状态分布 + TOP游戏 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
               <div className="game-card p-6">
-                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">ARTICLE STATUS BREAKDOWN</h3>
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">文章状态分布</h3>
                 <div className="space-y-3">
                   {Object.entries(stats.articlesByStatus).map(([status, count]) => (
                     <div key={status} className="flex items-center justify-between">
                       <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${getStatusBadge(status)}`}>
-                        {status.toUpperCase()}
+                        {getStatusLabel(status)}
                       </span>
                       <div className="flex items-center gap-3">
                         <div className="w-32 h-2 rounded-full bg-muted overflow-hidden">
@@ -617,7 +746,7 @@ export default function AdminPage() {
               </div>
 
               <div className="game-card p-6">
-                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">TOP GAMES BY COVERAGE</h3>
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">游戏覆盖率 TOP5</h3>
                 <div className="space-y-3">
                   {topGames.length > 0 ? topGames.map((game, i) => (
                     <div key={game.slug} className="flex items-center justify-between">
@@ -625,76 +754,81 @@ export default function AdminPage() {
                         <span className="text-xs font-bold text-purple-400 w-5">#{i + 1}</span>
                         <span className="text-sm text-foreground">{game.name}</span>
                       </div>
-                      <span className="text-sm text-muted-foreground">{game.article_count} articles</span>
+                      <span className="text-sm text-muted-foreground">{game.article_count} 篇</span>
                     </div>
                   )) : (
-                    <p className="text-sm text-muted-foreground">No data yet</p>
+                    <p className="text-sm text-muted-foreground">暂无数据</p>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Queue Quick View */}
+            {/* 发布队列概览 */}
             <div className="game-card p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">PUBLISH QUEUE</h3>
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">发布队列</h3>
                 <button
                   onClick={handleProcessQueue}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/30 text-xs font-semibold text-green-400 hover:bg-green-500/20 transition-all"
                 >
                   <Play className="h-3 w-3" />
-                  Process Now
+                  立即执行
                 </button>
               </div>
               <div className="flex gap-6">
                 {Object.entries(stats.queueByStatus).map(([status, count]) => (
                   <div key={status} className="flex items-center gap-2">
                     <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${getQueueStatusBadge(status)}`}>
-                      {status.toUpperCase()}
+                      {getQueueStatusLabel(status)}
                     </span>
                     <span className="text-lg font-bold text-foreground">{count}</span>
                   </div>
                 ))}
                 {Object.keys(stats.queueByStatus).length === 0 && (
-                  <p className="text-sm text-muted-foreground">Queue is empty</p>
+                  <p className="text-sm text-muted-foreground">队列为空</p>
                 )}
               </div>
             </div>
           </div>
         )}
 
-        {/* ===== Articles / Review Tab ===== */}
+        {/* ===== 内容审核 Tab ===== */}
         {activeTab === 'articles' && (
           <div>
-            {/* Filter + Batch Actions */}
+            {/* 筛选 + 批量操作 */}
             <div className="flex items-center gap-3 mb-4 flex-wrap">
-              <span className="text-sm text-muted-foreground">Filter:</span>
-              {['', 'generated', 'reviewed', 'published'].map((s) => (
+              <span className="text-sm text-muted-foreground">筛选：</span>
+              {[
+                { key: '', label: '全部' },
+                { key: 'generated', label: '已生成' },
+                { key: 'reviewed', label: '已审核' },
+                { key: 'published', label: '已发布' },
+              ].map((s) => (
                 <button
-                  key={s}
-                  onClick={() => { setStatusFilter(s); setSelectedArticles(new Set()); }}
+                  key={s.key}
+                  onClick={() => { setStatusFilter(s.key); setSelectedArticles(new Set()); }}
                   className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                    statusFilter === s
+                    statusFilter === s.key
                       ? 'bg-purple-500/20 border border-purple-500/30 text-purple-400'
                       : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                   }`}
                 >
-                  {s ? s.toUpperCase() : 'ALL'}
+                  {s.label}
                 </button>
               ))}
 
               <div className="ml-auto flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{articles.length} articles</span>
+                <span className="text-xs text-muted-foreground">共 {articles.length} 篇</span>
                 {selectedArticles.size > 0 && (
-                  <span className="text-xs text-purple-400 font-semibold">{selectedArticles.size} selected</span>
+                  <span className="text-xs text-purple-400 font-semibold">已选 {selectedArticles.size} 篇</span>
                 )}
               </div>
             </div>
 
-            {/* Batch Action Bar */}
+            {/* 批量操作栏 */}
             {selectedArticles.size > 0 && (
               <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                <span className="text-sm text-purple-300 font-semibold">{selectedArticles.size} selected</span>
+                <span className="text-sm text-purple-300 font-semibold">已选 {selectedArticles.size} 篇</span>
                 <div className="flex gap-2 ml-auto">
                   <button
                     onClick={() => handleBatchAction('review')}
@@ -702,7 +836,7 @@ export default function AdminPage() {
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/30 text-xs font-bold text-green-400 hover:bg-green-500/30 transition-all disabled:opacity-50"
                   >
                     <CheckCheck className="h-3.5 w-3.5" />
-                    Batch Approve
+                    批量审核
                   </button>
                   <button
                     onClick={() => handleBatchAction('publish')}
@@ -710,7 +844,7 @@ export default function AdminPage() {
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-xs font-bold text-cyan-400 hover:bg-cyan-500/30 transition-all disabled:opacity-50"
                   >
                     <ArrowUpRight className="h-3.5 w-3.5" />
-                    Batch Publish
+                    批量发布
                   </button>
                   <button
                     onClick={() => handleBatchAction('delete')}
@@ -718,31 +852,31 @@ export default function AdminPage() {
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/30 text-xs font-bold text-red-400 hover:bg-red-500/30 transition-all disabled:opacity-50"
                   >
                     <XCircle className="h-3.5 w-3.5" />
-                    Batch Delete
+                    批量删除
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Select All */}
+            {/* 全选 */}
             {articles.length > 0 && (
               <div className="flex items-center gap-3 mb-3">
                 <button
                   onClick={selectAllVisible}
                   className="text-xs text-purple-400 hover:text-purple-300 font-semibold"
                 >
-                  Select All Visible
+                  全选当前列表
                 </button>
                 <button
                   onClick={() => setSelectedArticles(new Set())}
                   className="text-xs text-muted-foreground hover:text-foreground"
                 >
-                  Clear Selection
+                  取消选择
                 </button>
               </div>
             )}
 
-            {/* Article List */}
+            {/* 文章列表 */}
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 text-purple-400 animate-spin" />
@@ -752,7 +886,7 @@ export default function AdminPage() {
                 {articles.map((article) => (
                   <div key={article.id} className={`game-card p-4 transition-all ${selectedArticles.has(article.id) ? 'ring-1 ring-purple-500/50' : ''}`}>
                     <div className="flex items-start gap-3">
-                      {/* Checkbox */}
+                      {/* 复选框 */}
                       <button
                         onClick={() => toggleSelectArticle(article.id)}
                         className={`mt-1 h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
@@ -769,10 +903,13 @@ export default function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${getStatusBadge(article.status)}`}>
-                            {article.status.toUpperCase()}
+                            {getStatusLabel(article.status)}
                           </span>
                           {article.game_name && (
                             <span className="text-xs text-purple-400 font-medium">{article.game_name}</span>
+                          )}
+                          {article.keywords && article.keywords.length > 0 && (
+                            <span className="text-[10px] text-cyan-400">{getGuideTypeIcon(article.keywords[0])} {getGuideTypeLabel(article.keywords[0])}</span>
                           )}
                         </div>
                         <h3 className="text-sm font-bold text-foreground leading-snug">{article.title}</h3>
@@ -793,29 +930,29 @@ export default function AdminPage() {
                       <div className="flex items-center gap-1.5 shrink-0">
                         {article.status === 'generated' && (
                           <>
-                            <button onClick={() => handleReview(article.id)} title="Approve" className="p-1.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-all">
+                            <button onClick={() => handleReview(article.id)} title="审核通过" className="p-1.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-all">
                               <CheckCircle className="h-4 w-4" />
                             </button>
-                            <button onClick={() => handleDelete(article.id)} title="Reject & Delete" className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all">
+                            <button onClick={() => handleDelete(article.id)} title="拒绝并删除" className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all">
                               <Trash2 className="h-4 w-4" />
                             </button>
                           </>
                         )}
                         {article.status === 'reviewed' && (
-                          <button onClick={() => handlePublishNow(article.id)} title="Publish Now" className="p-1.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-all">
+                          <button onClick={() => handlePublishNow(article.id)} title="立即发布" className="p-1.5 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-all">
                             <ArrowUpRight className="h-4 w-4" />
                           </button>
                         )}
                         <button
                           onClick={() => setExpandedArticle(expandedArticle === article.id ? null : article.id)}
-                          title="Preview"
+                          title="预览内容"
                           className="p-1.5 rounded-lg bg-accent text-muted-foreground hover:text-foreground transition-all"
                         >
                           {expandedArticle === article.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </button>
                         <button
                           onClick={() => handleGenerateImage(article.id, article.game_name)}
-                          title="Generate Image"
+                          title="生成封面图"
                           disabled={generatingImage === article.id}
                           className="p-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all disabled:opacity-50"
                         >
@@ -824,7 +961,7 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    {/* Expanded preview */}
+                    {/* 展开预览 */}
                     {expandedArticle === article.id && (
                       <div className="mt-4 pt-4 border-t border-border">
                         <div className="text-xs text-muted-foreground max-h-64 overflow-y-auto" dangerouslySetInnerHTML={{ __html: article.content.slice(0, 3000) }} />
@@ -841,7 +978,7 @@ export default function AdminPage() {
                                 onClick={() => handleSchedule(article.id)}
                                 className="px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs font-semibold text-amber-400 hover:bg-amber-500/20 transition-all"
                               >
-                                Schedule
+                                定时发布
                               </button>
                             </div>
                           )}
@@ -854,33 +991,33 @@ export default function AdminPage() {
             ) : (
               <div className="text-center py-12 text-muted-foreground">
                 <FileText className="h-10 w-10 mx-auto mb-3 opacity-50" />
-                <p className="font-semibold">No articles found</p>
+                <p className="font-semibold">暂无文章</p>
               </div>
             )}
           </div>
         )}
 
-        {/* ===== AI Generate Tab ===== */}
+        {/* ===== AI生成 Tab ===== */}
         {activeTab === 'generate' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: Generation Controls */}
+            {/* 左侧：生成控制 */}
             <div className="lg:col-span-1 space-y-4">
               <div className="game-card p-5">
-                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">SELECT GAME</h3>
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">选择游戏</h3>
                 <select
                   value={selectedGame}
                   onChange={(e) => { setSelectedGame(e.target.value); setSelectedTopic(''); setCustomTopic(''); }}
                   className="w-full px-3 py-2.5 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-purple-500/50"
                 >
-                  <option value="">-- Choose a game --</option>
+                  <option value="">-- 请选择游戏 --</option>
                   {games.map((g) => (
-                    <option key={g.id} value={g.id}>{g.name} ({g.article_count} guides)</option>
+                    <option key={g.id} value={g.id}>{g.name} ({g.article_count} 篇攻略)</option>
                   ))}
                 </select>
               </div>
 
               <div className="game-card p-5">
-                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">GUIDE TYPE</h3>
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">攻略类型</h3>
                 <div className="grid grid-cols-5 gap-1.5">
                   <button
                     onClick={() => setGuideType('')}
@@ -888,7 +1025,7 @@ export default function AdminPage() {
                       guideType === '' ? 'bg-purple-500/20 border border-purple-500/30 text-purple-400' : 'bg-card border border-border text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    ALL
+                    全部
                   </button>
                   {guideTypes.map((g) => (
                     <button
@@ -899,19 +1036,19 @@ export default function AdminPage() {
                       }`}
                       title={g.description}
                     >
-                      {g.icon} {g.label.split(' ')[0]}
+                      {g.icon} {getGuideTypeLabel(g.type).slice(0, 2)}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="game-card p-5">
-                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">CUSTOM TOPIC</h3>
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">自定义话题</h3>
                 <input
                   type="text"
                   value={customTopic}
                   onChange={(e) => { setCustomTopic(e.target.value); setSelectedTopic(''); }}
-                  placeholder="Enter custom topic or leave blank for auto-select..."
+                  placeholder="输入自定义话题，留空则自动选择..."
                   className="w-full px-3 py-2.5 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-purple-500/50 placeholder:text-muted-foreground/50"
                 />
               </div>
@@ -923,9 +1060,9 @@ export default function AdminPage() {
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-purple-500/20 border border-purple-500/30 text-sm font-bold text-purple-400 hover:bg-purple-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {generating ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" />Generating...</>
+                    <><Loader2 className="h-4 w-4 animate-spin" />生成中...</>
                   ) : (
-                    <><Zap className="h-4 w-4" />Generate Single Guide</>
+                    <><Zap className="h-4 w-4" />生成单篇攻略</>
                   )}
                 </button>
 
@@ -935,16 +1072,16 @@ export default function AdminPage() {
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-sm font-bold text-cyan-400 hover:bg-cyan-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {batchGenerating ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" />Planning...</>
+                    <><Loader2 className="h-4 w-4 animate-spin" />规划中...</>
                   ) : (
-                    <><Sparkles className="h-4 w-4" />Batch Generate (5 Articles)</>
+                    <><Sparkles className="h-4 w-4" />批量生成（5篇）</>
                   )}
                 </button>
               </div>
 
               {showBatchPlan && batchPlan.length > 0 && (
                 <div className="game-card p-5">
-                  <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-3">BATCH PLAN</h3>
+                  <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-3">批量生成计划</h3>
                   <div className="space-y-2 mb-4">
                     {batchPlan.map((plan, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs">
@@ -962,14 +1099,14 @@ export default function AdminPage() {
                       {batchGenerating ? (
                         <><Loader2 className="h-3 w-3 animate-spin" />{batchProgress.current}/{batchProgress.total}</>
                       ) : (
-                        <><CheckCircle className="h-3 w-3" />Execute Batch</>
+                        <><CheckCircle className="h-3 w-3" />确认生成</>
                       )}
                     </button>
                     <button
                       onClick={() => { setShowBatchPlan(false); setBatchPlan([]); }}
                       className="px-3 py-2 rounded-lg bg-card border border-border text-xs font-semibold text-muted-foreground hover:text-foreground transition-all"
                     >
-                      Cancel
+                      取消
                     </button>
                   </div>
                 </div>
@@ -979,20 +1116,20 @@ export default function AdminPage() {
                 <div className="flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
                   <div className="text-xs text-amber-300/80 space-y-1">
-                    <p>AI auto-selects trending topics with SEO keywords. Select a guide type for specialized formatting.</p>
-                    <p>Generated articles need your review before publishing.</p>
+                    <p>AI会自动选择热门话题并填充SEO关键词，选择攻略类型可获得专业格式。</p>
+                    <p>生成的文章需要审核后才能发布。</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Right: Topics & Trending */}
+            {/* 右侧：话题与趋势 */}
             <div className="lg:col-span-2 space-y-4">
               {trending.length > 0 && (
                 <div className="game-card p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <Flame className="h-4 w-4 text-orange-400" />
-                    <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">TRENDING TOPICS</h3>
+                    <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">热门话题</h3>
                   </div>
                   <div className="space-y-2">
                     {trending.map((t, i) => (
@@ -1010,7 +1147,7 @@ export default function AdminPage() {
                           <p className="text-sm font-semibold text-foreground truncate">{t.topic}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="text-xs text-purple-400">{t.gameName}</span>
-                            <span className="text-xs text-muted-foreground">Priority: {'\uD83D\uDD25'.repeat(Math.ceil(t.priority / 3))}</span>
+                            <span className="text-xs text-muted-foreground">优先级：{'\uD83D\uDD25'.repeat(Math.ceil(t.priority / 3))}</span>
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-1 max-w-[200px]">
@@ -1030,8 +1167,8 @@ export default function AdminPage() {
                 <div className="game-card p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <ListChecks className="h-4 w-4 text-green-400" />
-                    <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">AVAILABLE TOPICS</h3>
-                    <span className="ml-auto text-xs text-muted-foreground">{topics.filter(t => !t.used).length} available / {topics.length} total</span>
+                    <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">可用话题</h3>
+                    <span className="ml-auto text-xs text-muted-foreground">{topics.filter(t => !t.used).length} 可用 / {topics.length} 总计</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[500px] overflow-y-auto">
                     {topics.map((t, i) => (
@@ -1062,39 +1199,39 @@ export default function AdminPage() {
               {!selectedGame && (
                 <div className="text-center py-16 text-muted-foreground">
                   <Gamepad2 className="h-12 w-12 mx-auto mb-4 opacity-30" />
-                  <p className="font-semibold text-lg">Select a game to see available topics</p>
-                  <p className="text-sm mt-1">Choose from trending topics or let AI auto-select the best one</p>
+                  <p className="font-semibold text-lg">请先选择游戏查看话题</p>
+                  <p className="text-sm mt-1">从热门话题中选择，或让AI自动选择最佳话题</p>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* ===== Schedule Tab ===== */}
+        {/* ===== 发布调度 Tab ===== */}
         {activeTab === 'schedule' && (
           <div>
-            {/* Daily Auto-Schedule Panel */}
+            {/* 每日自动调度 */}
             <div className="game-card p-6 mb-6">
               <div className="flex items-center gap-2 mb-4">
                 <Activity className="h-5 w-5 text-purple-400" />
-                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">DAILY AUTO-SCHEDULE</h3>
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">每日自动调度</h3>
               </div>
-              <p className="text-xs text-muted-foreground mb-4">Automatically schedule reviewed articles for publishing throughout the day.</p>
+              <p className="text-xs text-muted-foreground mb-4">自动将已审核文章安排到当天不同时间段发布，错峰提升SEO效果。</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                 <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-1 block">Articles per day</label>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">每日发布篇数</label>
                   <select
                     value={dailyCount}
                     onChange={(e) => setDailyCount(parseInt(e.target.value))}
                     className="w-full px-3 py-2 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-purple-500/50"
                   >
                     {[1, 2, 3, 5, 8, 10].map(n => (
-                      <option key={n} value={n}>{n} articles</option>
+                      <option key={n} value={n}>{n} 篇</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-1 block">Start hour (24h)</label>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">起始时间（24小时制）</label>
                   <select
                     value={dailyStartHour}
                     onChange={(e) => setDailyStartHour(parseInt(e.target.value))}
@@ -1106,14 +1243,14 @@ export default function AdminPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-1 block">Interval (hours)</label>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">发布间隔</label>
                   <select
                     value={dailyInterval}
                     onChange={(e) => setDailyInterval(parseInt(e.target.value))}
                     className="w-full px-3 py-2 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-purple-500/50"
                   >
                     {[1, 2, 3, 4, 6].map(h => (
-                      <option key={h} value={h}>Every {h}h</option>
+                      <option key={h} value={h}>每 {h} 小时</option>
                     ))}
                   </select>
                 </div>
@@ -1124,45 +1261,45 @@ export default function AdminPage() {
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-500/20 border border-purple-500/30 text-sm font-bold text-purple-400 hover:bg-purple-500/30 transition-all disabled:opacity-50"
               >
                 {schedulingDaily ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" />Scheduling...</>
+                  <><Loader2 className="h-4 w-4 animate-spin" />调度中...</>
                 ) : (
-                  <><Calendar className="h-4 w-4" />Auto-Schedule Now</>
+                  <><Calendar className="h-4 w-4" />立即调度</>
                 )}
               </button>
             </div>
 
-            {/* Schedule Stats */}
+            {/* 调度统计 */}
             {scheduleStats && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                 <div className="game-card p-4 text-center">
                   <p className="text-2xl font-black font-display text-foreground">{scheduleStats.today_scheduled}</p>
-                  <p className="text-xs text-muted-foreground">Scheduled Today</p>
+                  <p className="text-xs text-muted-foreground">今日调度</p>
                 </div>
                 <div className="game-card p-4 text-center">
                   <p className="text-2xl font-black font-display text-green-400">{scheduleStats.today_published}</p>
-                  <p className="text-xs text-muted-foreground">Published Today</p>
+                  <p className="text-xs text-muted-foreground">今日已发</p>
                 </div>
                 <div className="game-card p-4 text-center">
                   <p className="text-2xl font-black font-display text-amber-400">{scheduleStats.pending}</p>
-                  <p className="text-xs text-muted-foreground">Pending</p>
+                  <p className="text-xs text-muted-foreground">等待发布</p>
                 </div>
                 <div className="game-card p-4 text-center">
                   <p className="text-2xl font-black font-display text-red-400">{scheduleStats.failed}</p>
-                  <p className="text-xs text-muted-foreground">Failed</p>
+                  <p className="text-xs text-muted-foreground">发布失败</p>
                 </div>
               </div>
             )}
 
-            {/* Queue Actions */}
+            {/* 队列操作 */}
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">PUBLISH QUEUE ({queue.length} items)</h3>
+              <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">发布队列（{queue.length} 条）</h3>
               <div className="flex gap-2">
                 <button
                   onClick={handleProcessQueue}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-sm font-semibold text-green-400 hover:bg-green-500/20 transition-all"
                 >
                   <Play className="h-4 w-4" />
-                  Process Due Items
+                  执行到期任务
                 </button>
               </div>
             </div>
@@ -1176,17 +1313,16 @@ export default function AdminPage() {
                         <p className="text-sm font-semibold text-foreground truncate">{item.article_title}</p>
                         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{new Date(item.scheduled_at).toLocaleString()}</span>
-                          <span>Attempts: {item.attempts}</span>
+                          <span>重试次数：{item.attempts}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-3">
                         <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-bold ${getQueueStatusBadge(item.status)}`}>
-                          {item.status.toUpperCase()}
+                          {getQueueStatusLabel(item.status)}
                         </span>
                         {item.status === 'failed' && (
                           <button
                             onClick={async () => {
-                              // Reset failed item for retry
                               await fetch('/api/schedule', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -1195,7 +1331,7 @@ export default function AdminPage() {
                               fetchQueue();
                             }}
                             className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-all"
-                            title="Retry"
+                            title="重试"
                           >
                             <RefreshCw className="h-3.5 w-3.5" />
                           </button>
@@ -1208,8 +1344,8 @@ export default function AdminPage() {
             ) : (
               <div className="text-center py-12 text-muted-foreground">
                 <Calendar className="h-10 w-10 mx-auto mb-3 opacity-50" />
-                <p className="font-semibold">Queue is empty</p>
-                <p className="text-sm mt-1">Review and schedule articles from the Review tab, or use Daily Auto-Schedule above.</p>
+                <p className="font-semibold">队列为空</p>
+                <p className="text-sm mt-1">请先审核文章，然后使用每日自动调度安排发布。</p>
               </div>
             )}
           </div>
