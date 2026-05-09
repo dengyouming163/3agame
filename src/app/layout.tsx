@@ -3,6 +3,7 @@ import './globals.css';
 import Link from 'next/link';
 import { Swords, Gamepad2, Shield, Map as MapIcon, Lightbulb } from 'lucide-react';
 import { MobileNav } from '@/components/mobile-nav';
+import { PageTracker } from '@/components/page-tracker';
 
 export const metadata: Metadata = {
   title: {
@@ -163,6 +164,9 @@ export default function RootLayout({
             </div>
           </div>
         </header>
+
+        {/* Page View Tracker (admin/api pages excluded) */}
+        <PageTracker />
 
         {/* Main Content */}
         <main>{children}</main>

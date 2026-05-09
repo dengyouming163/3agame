@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Swords, Shield, MapIcon, Gamepad2, Lightbulb, BarChart3, FileText, Zap, Calendar, Trash2, Eye, CheckCircle, RefreshCw, Clock, TrendingUp, BookOpen, AlertCircle, ChevronDown, ChevronRight, Loader2, ImagePlus, Flame, Sparkles, ListChecks, Play, CheckCheck, XCircle, Activity, Target, ArrowUpRight, Lock } from 'lucide-react';
+import { Swords, Shield, MapIcon, Gamepad2, Lightbulb, BarChart3, FileText, Zap, Calendar, Trash2, Eye, CheckCircle, RefreshCw, Clock, TrendingUp, BookOpen, AlertCircle, ChevronDown, ChevronRight, Loader2, ImagePlus, Flame, Sparkles, ListChecks, Play, CheckCheck, XCircle, Activity, Target, ArrowUpRight, Lock, MousePointerClick, Globe, ExternalLink, MapPin } from 'lucide-react';
 
 // ===== TYPES =====
 interface Article {
@@ -101,9 +101,52 @@ interface TrendItem {
   count: number;
 }
 
+interface AnalyticsDailyTrend {
+  date: string;
+  pageViews: number;
+  uniqueVisitors: number;
+}
+
+interface AnalyticsTopPage {
+  path: string;
+  views: number;
+  uniqueVisitors: number;
+}
+
+interface AnalyticsTopReferrer {
+  source: string;
+  views: number;
+}
+
+interface AnalyticsTopCountry {
+  region: string;
+  views: number;
+  uniqueVisitors: number;
+}
+
+interface AnalyticsTopGuide {
+  path: string;
+  title: string;
+  views: number;
+  uniqueVisitors: number;
+}
+
+interface AnalyticsData {
+  today: { pageViews: number; uniqueVisitors: number };
+  yesterday: { pageViews: number; uniqueVisitors: number };
+  total: { pageViews: number; uniqueVisitors: number };
+  weekAvg: { pageViews: number; uniqueVisitors: number };
+  thirtyDayTrend: AnalyticsDailyTrend[];
+  topPages: AnalyticsTopPage[];
+  topReferrers: AnalyticsTopReferrer[];
+  topCountries: AnalyticsTopCountry[];
+  topGuides: AnalyticsTopGuide[];
+}
+
 // ===== TAB CONFIG =====
 const TABS = [
   { id: 'dashboard', label: '数据概览', icon: BarChart3 },
+  { id: 'analytics', label: '流量报表', icon: Activity },
   { id: 'articles', label: '内容审核', icon: FileText },
   { id: 'generate', label: 'AI生成', icon: Zap },
   { id: 'schedule', label: '发布调度', icon: Calendar },
@@ -178,6 +221,7 @@ function getGuideTypeLabel(type: string) {
 export default function AdminPage() {
   // Auth state
   const [authenticated, setAuthenticated] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -219,10 +263,15 @@ export default function AdminPage() {
   const [dailyInterval, setDailyInterval] = useState(3);
   const [schedulingDaily, setSchedulingDaily] = useState(false);
 
+  // Analytics state
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
   // Check login on mount
   useEffect(() => {
     const isAuth = sessionStorage.getItem('admin_auth');
     if (isAuth === 'true') setAuthenticated(true);
+    setMounted(true);
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -318,6 +367,18 @@ export default function AdminPage() {
     } catch (e) { console.error(e); }
   }, [guideType]);
 
+  const fetchAnalytics = useCallback(async () => {
+    setAnalyticsLoading(true);
+    try {
+      const res = await fetch('/api/analytics');
+      if (res.ok) {
+        const data = await res.json();
+        setAnalytics(data);
+      }
+    } catch (e) { console.error(e); }
+    setAnalyticsLoading(false);
+  }, []);
+
   useEffect(() => {
     if (!authenticated) return;
     fetchDashboard();
@@ -329,6 +390,7 @@ export default function AdminPage() {
     if (activeTab === 'articles') fetchArticles();
     if (activeTab === 'schedule') fetchQueue();
     if (activeTab === 'dashboard') fetchDashboard();
+    if (activeTab === 'analytics') fetchAnalytics();
     if (activeTab === 'generate' && selectedGame) {
       const game = games.find(g => g.id.toString() === selectedGame);
       if (game) fetchTopics(game.slug);
@@ -564,6 +626,14 @@ export default function AdminPage() {
   };
 
   // ===== LOGIN SCREEN =====
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
+      </div>
+    );
+  }
+
   if (!authenticated) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
@@ -789,6 +859,205 @@ export default function AdminPage() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ===== 流量报表 Tab ===== */}
+        {activeTab === 'analytics' && (
+          <div>
+            {analyticsLoading && !analytics ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-8 w-8 animate-spin text-purple-400" />
+                <span className="ml-3 text-muted-foreground">加载流量数据...</span>
+              </div>
+            ) : analytics ? (
+              <>
+                {/* 今日 + 昨日 + 总计 + 周均 */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-card border border-border rounded-xl p-5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <MousePointerClick className="h-4 w-4 text-cyan-400" />
+                      <span className="text-xs text-muted-foreground">今日浏览量</span>
+                    </div>
+                    <div className="text-2xl font-bold text-cyan-400">{analytics.today.pageViews.toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      UV: {analytics.today.uniqueVisitors.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="bg-card border border-border rounded-xl p-5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Eye className="h-4 w-4 text-purple-400" />
+                      <span className="text-xs text-muted-foreground">昨日浏览量</span>
+                    </div>
+                    <div className="text-2xl font-bold text-purple-400">{analytics.yesterday.pageViews.toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      UV: {analytics.yesterday.uniqueVisitors.toLocaleString()}
+                      {analytics.yesterday.pageViews > 0 && analytics.today.pageViews > 0 && (
+                        <span className={`ml-2 ${analytics.today.pageViews >= analytics.yesterday.pageViews ? 'text-green-400' : 'text-red-400'}`}>
+                          {analytics.today.pageViews >= analytics.yesterday.pageViews ? '↑' : '↓'}
+                          {Math.abs(Math.round((analytics.today.pageViews - analytics.yesterday.pageViews) / analytics.yesterday.pageViews * 100))}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="bg-card border border-border rounded-xl p-5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingUp className="h-4 w-4 text-green-400" />
+                      <span className="text-xs text-muted-foreground">7天日均</span>
+                    </div>
+                    <div className="text-2xl font-bold text-green-400">{analytics.weekAvg.pageViews.toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      日均UV: {analytics.weekAvg.uniqueVisitors.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="bg-card border border-border rounded-xl p-5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Activity className="h-4 w-4 text-amber-400" />
+                      <span className="text-xs text-muted-foreground">累计浏览量</span>
+                    </div>
+                    <div className="text-2xl font-bold text-amber-400">{analytics.total.pageViews.toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      累计UV: {analytics.total.uniqueVisitors.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 30天流量趋势图 */}
+                <div className="bg-card border border-border rounded-xl p-5 mb-6">
+                  <h3 className="text-sm font-semibold text-foreground mb-4">30天流量趋势</h3>
+                  <div className="flex items-end gap-[3px] h-48">
+                    {analytics.thirtyDayTrend.map((d, i) => {
+                      const maxPv = Math.max(...analytics.thirtyDayTrend.map(t => t.pageViews), 1);
+                      const pvH = Math.max((d.pageViews / maxPv) * 100, 2);
+                      const maxUv = Math.max(...analytics.thirtyDayTrend.map(t => t.uniqueVisitors), 1);
+                      const uvH = Math.max((d.uniqueVisitors / maxUv) * 100, 2);
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-[2px] group relative">
+                          <div className="absolute bottom-full mb-2 hidden group-hover:block bg-popover border border-border rounded-lg px-3 py-2 text-xs whitespace-nowrap z-10 shadow-lg">
+                            <div className="font-semibold">{d.date}</div>
+                            <div className="text-cyan-400">PV: {d.pageViews}</div>
+                            <div className="text-purple-400">UV: {d.uniqueVisitors}</div>
+                          </div>
+                          <div className="w-full bg-cyan-500/70 rounded-t-sm transition-all" style={{ height: `${pvH}%` }} />
+                          <div className="w-full bg-purple-500/50 rounded-t-sm transition-all" style={{ height: `${uvH}%` }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center gap-6 mt-3 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-cyan-500/70" />浏览量 PV</div>
+                    <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-purple-500/50" />独立访客 UV</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  {/* TOP 10 热门页面（7天） */}
+                  <div className="bg-card border border-border rounded-xl p-5">
+                    <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <ExternalLink className="h-4 w-4 text-cyan-400" />
+                      热门页面（7天）
+                    </h3>
+                    <div className="space-y-2">
+                      {analytics.topPages.length === 0 ? (
+                        <div className="text-sm text-muted-foreground text-center py-8">暂无数据</div>
+                      ) : analytics.topPages.slice(0, 10).map((p, i) => (
+                        <div key={i} className="flex items-center gap-3 py-1.5">
+                          <span className={`text-xs font-bold w-5 text-center ${i < 3 ? 'text-amber-400' : 'text-muted-foreground'}`}>{i + 1}</span>
+                          <span className="text-sm text-foreground truncate flex-1" title={p.path}>{p.path}</span>
+                          <span className="text-xs text-cyan-400 font-mono">{p.views}</span>
+                          <span className="text-xs text-muted-foreground font-mono">UV:{p.uniqueVisitors}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* TOP 10 攻略流量排行（7天） */}
+                  <div className="bg-card border border-border rounded-xl p-5">
+                    <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-purple-400" />
+                      攻略流量排行（7天）
+                    </h3>
+                    <div className="space-y-2">
+                      {analytics.topGuides.length === 0 ? (
+                        <div className="text-sm text-muted-foreground text-center py-8">暂无数据</div>
+                      ) : analytics.topGuides.slice(0, 10).map((g, i) => (
+                        <div key={i} className="flex items-center gap-3 py-1.5">
+                          <span className={`text-xs font-bold w-5 text-center ${i < 3 ? 'text-amber-400' : 'text-muted-foreground'}`}>{i + 1}</span>
+                          <span className="text-sm text-foreground truncate flex-1" title={g.title}>{g.title || g.path}</span>
+                          <span className="text-xs text-purple-400 font-mono">{g.views}</span>
+                          <span className="text-xs text-muted-foreground font-mono">UV:{g.uniqueVisitors}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* TOP 10 来源（7天） */}
+                  <div className="bg-card border border-border rounded-xl p-5">
+                    <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <Globe className="h-4 w-4 text-green-400" />
+                      访问来源（7天）
+                    </h3>
+                    <div className="space-y-2">
+                      {analytics.topReferrers.length === 0 ? (
+                        <div className="text-sm text-muted-foreground text-center py-8">暂无数据</div>
+                      ) : analytics.topReferrers.slice(0, 10).map((r, i) => {
+                        const maxViews = analytics.topReferrers[0]?.views || 1;
+                        const barW = Math.max((r.views / maxViews) * 100, 3);
+                        return (
+                          <div key={i} className="flex items-center gap-3 py-1">
+                            <span className="text-sm text-foreground truncate flex-1" title={r.source}>{r.source}</span>
+                            <div className="w-24 h-4 bg-border rounded-full overflow-hidden">
+                              <div className="h-full bg-green-500/60 rounded-full" style={{ width: `${barW}%` }} />
+                            </div>
+                            <span className="text-xs text-green-400 font-mono w-10 text-right">{r.views}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* TOP 10 国家/地区（7天） */}
+                  <div className="bg-card border border-border rounded-xl p-5">
+                    <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-amber-400" />
+                      地区分布（7天）
+                    </h3>
+                    <div className="space-y-2">
+                      {analytics.topCountries.length === 0 ? (
+                        <div className="text-sm text-muted-foreground text-center py-8">暂无数据</div>
+                      ) : analytics.topCountries.slice(0, 10).map((c, i) => {
+                        const maxViews = analytics.topCountries[0]?.views || 1;
+                        const barW = Math.max((c.views / maxViews) * 100, 3);
+                        return (
+                          <div key={i} className="flex items-center gap-3 py-1">
+                            <span className="text-sm text-foreground w-16">{c.region}</span>
+                            <div className="flex-1 h-4 bg-border rounded-full overflow-hidden">
+                              <div className="h-full bg-amber-500/60 rounded-full" style={{ width: `${barW}%` }} />
+                            </div>
+                            <span className="text-xs text-amber-400 font-mono">{c.views}</span>
+                            <span className="text-xs text-muted-foreground font-mono">UV:{c.uniqueVisitors}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 刷新按钮 */}
+                <div className="mt-6 flex justify-center">
+                  <button
+                    onClick={() => fetchAnalytics()}
+                    disabled={analyticsLoading}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border text-sm text-muted-foreground hover:text-foreground hover:border-purple-500/50 transition-all disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${analyticsLoading ? 'animate-spin' : ''}`} />
+                    刷新数据
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
         )}
 
