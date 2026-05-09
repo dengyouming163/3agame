@@ -141,8 +141,12 @@ cmd_build() {
 
   # 复制静态资源到 standalone 目录
   info "组装 standalone 产物..."
-  STANDALONE_DIR="$PROJECT_DIR/.next/standalone/workspace/projects"
-  if [ -d "$STANDALONE_DIR" ]; then
+  # 自动检测 standalone 目录（沙箱是嵌套路径，服务器可能是扁平路径）
+  STANDALONE_DIR=$(find "$PROJECT_DIR/.next/standalone" -name "server.js" -not -path "*/node_modules/*" | head -1 | xargs dirname 2>/dev/null)
+  if [ -z "$STANDALONE_DIR" ]; then
+    error "未找到 standalone server.js，构建可能失败"
+    return 1
+  fi
     # 复制 .next/static
     cp -r "$PROJECT_DIR/.next/static" "$STANDALONE_DIR/.next/static"
     # 复制 public
@@ -163,9 +167,10 @@ cmd_build() {
 cmd_restart() {
   info "=== 重启服务 ==="
 
-  STANDALONE_DIR="$PROJECT_DIR/.next/standalone/workspace/projects"
+  # 同样检测 restart 时的 standalone 目录
+  STANDALONE_DIR=$(find "$PROJECT_DIR/.next/standalone" -name "server.js" -not -path "*/node_modules/*" | head -1 | xargs dirname 2>/dev/null)
 
-  if [ ! -f "$STANDALONE_DIR/server.js" ]; then
+  if [ -z "$STANDALONE_DIR" ] || [ ! -f "$STANDALONE_DIR/server.js" ]; then
     error "未找到 server.js，请先运行 bash deploy.sh build"
   fi
 
