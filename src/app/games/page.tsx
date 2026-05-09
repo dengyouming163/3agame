@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Gamepad2, BookOpen } from 'lucide-react';
-import { getBaseUrl } from '@/lib/utils';
+import { query } from '@/lib/db';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -21,11 +21,15 @@ interface Game {
 
 async function getGames(): Promise<Game[]> {
   try {
-    const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/api/games`, { next: { revalidate: 600 } });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.games || [];
+    const result = await query(
+      `SELECT g.id, g.name, g.slug, g.genre, g.platform, g.description,
+        COUNT(a.id) as article_count
+       FROM games g
+       LEFT JOIN articles a ON a.game_id = g.id AND a.status = 'published'
+       GROUP BY g.id, g.name, g.slug, g.genre, g.platform, g.description
+       ORDER BY article_count DESC, g.name`
+    );
+    return result.rows as Game[];
   } catch {
     return [];
   }

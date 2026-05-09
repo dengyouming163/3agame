@@ -1,30 +1,12 @@
 import Link from 'next/link';
 import { ArrowLeft, BookOpen, Clock, Swords } from 'lucide-react';
 import { formatDate } from '@/lib/game-utils';
-import { getBaseUrl } from '@/lib/utils';
+import { getImageUrlSync } from '@/lib/storage';
+import { query } from '@/lib/db';
 import type { Metadata } from 'next';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-}
-
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { slug } = await params;
-  try {
-    const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/api/games`, { next: { revalidate: 3600 } });
-    if (!res.ok) return { title: 'Game Not Found' };
-    const data = await res.json();
-    const game = data.games?.find((g: { slug: string }) => g.slug === slug);
-    if (!game) return { title: 'Game Not Found' };
-    return {
-      title: `${game.name} Guides - Boss Strategies, Builds & Walkthroughs`,
-      description: game.description || `Find the best ${game.name} guides. Boss strategies, optimal builds, collectible walkthroughs, and pro tips.`,
-      keywords: [game.name, `${game.name} guide`, `${game.name} walkthrough`, `${game.name} boss strategy`, `${game.name} builds`],
-    };
-  } catch {
-    return { title: 'Game | 3A Game Master' };
-  }
 }
 
 interface Game {
@@ -34,7 +16,6 @@ interface Game {
   genre: string | null;
   platform: string | null;
   description: string | null;
-  article_count: number;
 }
 
 interface Article {
@@ -46,29 +27,45 @@ interface Article {
   author: string;
   published_at: string | null;
   created_at: string;
-  cover_image_url: string | null;
+  cover_image_key: string | null;
 }
 
+// Direct DB query — single query by slug
 async function getGameData(slug: string): Promise<{ game: Game | null; articles: Article[] }> {
   try {
-    const baseUrl = getBaseUrl();
+    const gameResult = await query(
+      `SELECT id, name, slug, genre, platform, description FROM games WHERE slug = $1`,
+      [slug]
+    );
+    if (gameResult.rows.length === 0) return { game: null, articles: [] };
+    const game = gameResult.rows[0] as Game;
 
-    const [gamesRes, articlesRes] = await Promise.all([
-      fetch(`${baseUrl}/api/games`, { next: { revalidate: 3600 } }),
-      fetch(`${baseUrl}/api/articles?status=published&limit=50`, { next: { revalidate: 3600 } }),
-    ]);
-
-    if (!gamesRes.ok || !articlesRes.ok) return { game: null, articles: [] };
-
-    const gamesData = await gamesRes.json();
-    const articlesData = await articlesRes.json();
-
-    const game = (gamesData.games || []).find((g: Game) => g.slug === slug) || null;
-    const articles = (articlesData.articles || []).filter((a: { game_slug: string }) => a.game_slug === slug);
-
-    return { game, articles };
+    const articlesResult = await query(
+      `SELECT a.id, a.title, a.slug, a.summary, a.keywords, a.author,
+        a.published_at, a.created_at, a.cover_image_key
+       FROM articles a
+       WHERE a.game_id = $1 AND a.status = 'published'
+       ORDER BY a.created_at DESC`,
+      [game.id]
+    );
+    return { game, articles: articlesResult.rows as Article[] };
   } catch {
     return { game: null, articles: [] };
+  }
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+  try {
+    const { game } = await getGameData(slug);
+    if (!game) return { title: 'Game Not Found' };
+    return {
+      title: `${game.name} Guides - Boss Strategies, Builds & Walkthroughs`,
+      description: game.description || `Find the best ${game.name} guides. Boss strategies, optimal builds, collectible walkthroughs, and pro tips.`,
+      keywords: [game.name, `${game.name} guide`, `${game.name} walkthrough`, `${game.name} boss strategy`, `${game.name} builds`],
+    };
+  } catch {
+    return { title: 'Game | 3A Game Master' };
   }
 }
 
@@ -148,10 +145,10 @@ export default async function GameDetailPage({ params }: PageProps) {
               return (
                 <Link key={article.id} href={`/guides/${article.slug}`} className="block group">
                   <div className="game-card overflow-hidden h-full flex flex-col">
-                    {article.cover_image_url ? (
+                    {article.cover_image_key ? (
                       <div className="relative h-40 overflow-hidden">
                         <img
-                          src={article.cover_image_url}
+                          src={getImageUrlSync(article.cover_image_key)}
                           alt={article.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           loading="lazy"

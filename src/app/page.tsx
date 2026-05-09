@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { Swords, Shield, MapIcon, Gamepad2, Lightbulb, ChevronRight, Flame, Clock, TrendingUp } from 'lucide-react';
 import { formatDate } from '@/lib/game-utils';
-import { getBaseUrl } from '@/lib/utils';
+import { getImageUrlSync } from '@/lib/storage';
+import { query } from '@/lib/db';
 
 interface Article {
   id: number;
@@ -15,7 +16,7 @@ interface Article {
   created_at: string;
   game_name: string | null;
   game_slug: string | null;
-  cover_image_url?: string | null;
+  cover_image_key: string | null;
 }
 
 interface Game {
@@ -27,13 +28,20 @@ interface Game {
   article_count: number;
 }
 
+// Direct DB query — skips HTTP API layer for faster SSR
 async function getPublishedArticles(): Promise<Article[]> {
   try {
-    const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/api/articles?status=published&limit=12`, { next: { revalidate: 300 } });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.articles || [];
+    const result = await query(
+      `SELECT a.id, a.title, a.slug, a.summary, a.status, a.keywords, a.author,
+        a.published_at, a.created_at, a.cover_image_key,
+        g.name as game_name, g.slug as game_slug
+       FROM articles a
+       LEFT JOIN games g ON a.game_id = g.id
+       WHERE a.status = 'published'
+       ORDER BY a.created_at DESC
+       LIMIT 12`
+    );
+    return result.rows as Article[];
   } catch {
     return [];
   }
@@ -41,11 +49,16 @@ async function getPublishedArticles(): Promise<Article[]> {
 
 async function getGames(): Promise<Game[]> {
   try {
-    const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/api/games`, { next: { revalidate: 300 } });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.games || []).filter((g: Game) => g.article_count > 0);
+    const result = await query(
+      `SELECT g.id, g.name, g.slug, g.genre, g.platform,
+        COUNT(a.id) as article_count
+       FROM games g
+       LEFT JOIN articles a ON a.game_id = g.id AND a.status = 'published'
+       GROUP BY g.id, g.name, g.slug, g.genre, g.platform
+       HAVING COUNT(a.id) > 0
+       ORDER BY article_count DESC`
+    );
+    return result.rows as Game[];
   } catch {
     return [];
   }
@@ -110,10 +123,10 @@ export default async function HomePage() {
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6">
           <Link href={`/guides/${featured.slug}`} className="block group">
             <div className="game-card overflow-hidden">
-              {featured.cover_image_url ? (
+              {featured.cover_image_key ? (
                 <div className="relative">
                   <img
-                    src={featured.cover_image_url}
+                    src={getImageUrlSync(featured.cover_image_key)}
                     alt={featured.title}
                     className="w-full h-64 sm:h-80 object-cover"
                     width={1200}
@@ -209,10 +222,10 @@ export default async function HomePage() {
               return (
                 <Link key={article.id} href={`/guides/${article.slug}`} className="block group">
                   <div className="game-card overflow-hidden h-full flex flex-col">
-                    {article.cover_image_url ? (
+                    {article.cover_image_key ? (
                       <div className="relative h-40 overflow-hidden">
                         <img
-                          src={article.cover_image_url}
+                          src={getImageUrlSync(article.cover_image_key)}
                           alt={article.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           loading="lazy"
@@ -230,10 +243,10 @@ export default async function HomePage() {
                       </div>
                     )}
                     <div className="p-5 flex flex-col flex-1">
-                      {!article.cover_image_url && article.game_name && (
+                      {!article.cover_image_key && article.game_name && (
                         <span className="text-xs text-purple-400 font-medium mb-2">{article.game_name}</span>
                       )}
-                      {article.cover_image_url && article.game_name && (
+                      {article.cover_image_key && article.game_name && (
                         <span className="text-xs text-purple-400 font-medium mb-2">{article.game_name}</span>
                       )}
                       <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-purple-300 transition-colors leading-snug font-display">

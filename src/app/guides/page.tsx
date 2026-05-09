@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { Swords, Shield, MapIcon, Gamepad2, Lightbulb, Clock, Filter } from 'lucide-react';
 import { formatDate } from '@/lib/game-utils';
-import { getBaseUrl } from '@/lib/utils';
+import { getImageUrlSync } from '@/lib/storage';
+import { query } from '@/lib/db';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -22,17 +23,42 @@ interface Article {
   created_at: string;
   game_name: string | null;
   game_slug: string | null;
-  cover_image_url: string | null;
+  cover_image_key: string | null;
 }
 
+// Direct DB query with optional type filter
 async function getArticles(type?: string): Promise<Article[]> {
   try {
-    const baseUrl = getBaseUrl();
-    const typeParam = type ? `&type=${type}` : '';
-    const res = await fetch(`${baseUrl}/api/articles?status=published&limit=50${typeParam}`, { next: { revalidate: 600 } });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.articles || [];
+    let sql = `SELECT a.id, a.title, a.slug, a.summary, a.status, a.keywords, a.author,
+      a.published_at, a.created_at, a.cover_image_key,
+      g.name as game_name, g.slug as game_slug
+     FROM articles a
+     LEFT JOIN games g ON a.game_id = g.id
+     WHERE a.status = 'published'`;
+
+    const params: unknown[] = [];
+    if (type) {
+      const typeMap: Record<string, string[]> = {
+        boss: ['boss', 'fight', 'defeat', 'strategy'],
+        build: ['build', 'class', 'loadout', 'weapon'],
+        collectible: ['collectible', 'collect', 'location', 'find', 'item'],
+        walkthrough: ['walkthrough', 'guide', 'progress', 'chapter', 'complete'],
+        tips: ['tip', 'trick', 'secret', 'hint'],
+      };
+      const searchTerms = typeMap[type.toLowerCase()] || [type.toLowerCase()];
+      const orConditions = searchTerms.map(term => {
+        const p1 = params.length + 1;
+        const p2 = params.length + 2;
+        params.push(term, `%${term}%`);
+        return `($${p1} = ANY(a.keywords) OR a.title ILIKE $${p2})`;
+      });
+      sql += ` AND (${orConditions.join(' OR ')})`;
+    }
+
+    sql += ` ORDER BY a.created_at DESC LIMIT 50`;
+
+    const result = await query(sql, params);
+    return result.rows as Article[];
   } catch {
     return [];
   }
@@ -111,10 +137,10 @@ export default async function GuidesPage({
               return (
                 <Link key={article.id} href={`/guides/${article.slug}`} className="block group">
                   <div className="game-card overflow-hidden h-full flex flex-col">
-                    {article.cover_image_url ? (
+                    {article.cover_image_key ? (
                       <div className="relative h-44 overflow-hidden">
                         <img
-                          src={article.cover_image_url}
+                          src={getImageUrlSync(article.cover_image_key)}
                           alt={article.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           loading="lazy"
@@ -140,7 +166,7 @@ export default async function GuidesPage({
                       </div>
                     )}
                     <div className="p-5 flex flex-col flex-1">
-                      {!article.cover_image_url && article.game_name && (
+                      {!article.cover_image_key && article.game_name && (
                         <span className="text-xs text-purple-400 font-medium mb-2">{article.game_name}</span>
                       )}
                       <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-purple-300 transition-colors leading-snug font-display">

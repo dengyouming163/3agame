@@ -1,40 +1,13 @@
 import Link from 'next/link';
 import { Swords, ArrowLeft, Clock, Share2, Tag, BookOpen } from 'lucide-react';
 import { formatDate, stripHtml } from '@/lib/game-utils';
-import { getBaseUrl, getSiteUrl } from '@/lib/utils';
+import { getSiteUrl } from '@/lib/utils';
+import { getImageUrlSync } from '@/lib/storage';
+import { query } from '@/lib/db';
 import type { Metadata } from 'next';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
-}
-
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { slug } = await params;
-  try {
-    const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/api/articles?status=published&limit=100`, { next: { revalidate: 3600 } });
-    if (!res.ok) return { title: 'Guide Not Found' };
-    const data = await res.json();
-    const article = data.articles?.find((a: { slug: string }) => a.slug === slug);
-    if (!article) return { title: 'Guide Not Found' };
-    return {
-      title: article.meta_title || article.title,
-      description: article.meta_description || article.summary || `Read ${article.title} on 3A Game Master`,
-      keywords: article.keywords || [],
-      openGraph: {
-        title: article.meta_title || article.title,
-        description: article.meta_description || article.summary,
-        type: 'article',
-        url: `${getSiteUrl()}/guides/${slug}`,
-        images: article.cover_image_url ? [{ url: article.cover_image_url, width: 1200, height: 630 }] : undefined,
-        publishedTime: article.published_at,
-        authors: [article.author || '3A Game Master'],
-        tags: article.keywords || [],
-      },
-    };
-  } catch {
-    return { title: 'Guide | 3A Game Master' };
-  }
 }
 
 interface ArticleDetail {
@@ -52,24 +25,52 @@ interface ArticleDetail {
   published_at: string | null;
   game_name: string | null;
   game_slug: string | null;
-  cover_image_url: string | null;
+  cover_image_key: string | null;
 }
 
+// Direct DB query — single query by slug
 async function getArticle(slug: string): Promise<ArticleDetail | null> {
   try {
-    const baseUrl = getBaseUrl();
-    const listRes = await fetch(`${baseUrl}/api/articles?status=published&limit=100`, { next: { revalidate: 3600 } });
-    if (!listRes.ok) return null;
-    const listData = await listRes.json();
-    const articleStub = listData.articles?.find((a: { slug: string }) => a.slug === slug);
-    if (!articleStub) return null;
-
-    const detailRes = await fetch(`${baseUrl}/api/articles/${articleStub.id}`, { next: { revalidate: 3600 } });
-    if (!detailRes.ok) return null;
-    const detailData = await detailRes.json();
-    return detailData.article;
+    const result = await query(
+      `SELECT a.id, a.title, a.slug, a.content, a.summary, a.status, a.language,
+        a.meta_title, a.meta_description, a.keywords, a.author,
+        a.published_at, a.cover_image_key,
+        g.name as game_name, g.slug as game_slug
+       FROM articles a
+       LEFT JOIN games g ON a.game_id = g.id
+       WHERE a.slug = $1 AND a.status = 'published'`,
+      [slug]
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows[0] as ArticleDetail;
   } catch {
     return null;
+  }
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+  try {
+    const article = await getArticle(slug);
+    if (!article) return { title: 'Guide Not Found' };
+    const coverUrl = getImageUrlSync(article.cover_image_key);
+    return {
+      title: article.meta_title || article.title,
+      description: article.meta_description || article.summary || `Read ${article.title} on 3A Game Master`,
+      keywords: article.keywords || [],
+      openGraph: {
+        title: article.meta_title || article.title,
+        description: article.meta_description || article.summary || undefined,
+        type: 'article',
+        url: `${getSiteUrl()}/guides/${slug}`,
+        images: coverUrl !== '/placeholder-image.svg' ? [{ url: coverUrl, width: 1200, height: 630 }] : undefined,
+        publishedTime: article.published_at || undefined,
+        authors: [article.author || '3A Game Master'],
+        tags: article.keywords || [],
+      },
+    };
+  } catch {
+    return { title: 'Guide | 3A Game Master' };
   }
 }
 
@@ -113,6 +114,7 @@ export default async function GuidePage({ params }: PageProps) {
 
   const badge = getGuideBadge(article.keywords);
   const readingTime = getReadingTime(article.content);
+  const coverUrl = getImageUrlSync(article.cover_image_key);
 
   // JSON-LD structured data for SEO
   const jsonLd = {
@@ -120,7 +122,7 @@ export default async function GuidePage({ params }: PageProps) {
     '@type': 'Article',
     headline: article.meta_title || article.title,
     description: article.meta_description || article.summary || '',
-    image: article.cover_image_url || undefined,
+    image: coverUrl !== '/placeholder-image.svg' ? coverUrl : undefined,
     author: {
       '@type': 'Organization',
       name: article.author || '3A Game Master',
@@ -214,10 +216,10 @@ export default async function GuidePage({ params }: PageProps) {
 
       {/* Article Content */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {article.cover_image_url && (
+        {article.cover_image_key && (
           <div className="mb-10 rounded-xl overflow-hidden border border-border glow-border">
             <img
-              src={article.cover_image_url}
+              src={coverUrl}
               alt={article.title}
               className="w-full h-auto object-cover max-h-[400px]"
               width={1200}
