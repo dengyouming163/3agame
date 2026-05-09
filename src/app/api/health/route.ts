@@ -24,7 +24,8 @@ export async function GET() {
           error: dbHealth.error || null,
         },
         storage: {
-          configured: !!(process.env.COZE_BUCKET_ENDPOINT_URL && process.env.COZE_BUCKET_NAME),
+          configured: !!(process.env.R2_ENDPOINT || (process.env.COZE_BUCKET_ENDPOINT_URL && process.env.COZE_BUCKET_NAME)),
+          provider: process.env.R2_ENDPOINT ? 'Cloudflare R2' : (process.env.COZE_BUCKET_ENDPOINT_URL ? 'TOS' : 'none'),
         },
       },
       responseTimeMs: Date.now() - start,
