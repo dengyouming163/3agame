@@ -347,6 +347,78 @@ export const GAME_TOPICS: Record<string, Record<GuideType, string[]>> = {
     walkthrough: ['Complete Chapter-by-Chapter Walkthrough', 'Secret Area Access Guide - All Hidden Paths', 'How to Unlock True Ending', 'All Story Choices & Consequences', 'Chapter 6 Final Area Complete Guide'],
     tips: ['20 Things Black Myth Wukong Doesnt Tell You', 'Stance Switching Combat Guide', 'Spell Timing & Cooldown Optimization', 'Most Common Mistakes New Players Make', 'How to Farm Will & Resources Efficiently'],
   },
+  // Stellar Blade - PS5 exclusive, high search volume
+  'stellar-blade': {
+    boss: ['Gigas Boss Strategy - Alpha Sector', 'Unidentified Naytiba Boss Guide', 'Corruptor Boss Fight Strategy', 'Duality Boss - Phase Breakdown', 'All Elite Naytiba Strategies'],
+    build: ['Best Beta Skill Combinations', 'Maximum DPS Build Guide', 'Survival Build for Hard Mode', 'Best Gear & Exospine Combinations', 'Speedrun Build Optimization'],
+    collectible: ['All Can Locations & Memory Stick Rewards', 'All Exospine Locations', 'All Camp Collector Items', 'All Drone Energy Cell Locations', 'All Hidden Chest Locations'],
+    walkthrough: ['Complete Story Walkthrough - All Sectors', 'Alpha Sector Full Exploration', 'Wasteland Sector Guide', 'Great Desert All Quests', 'How to Unlock All Endings'],
+    tips: ['15 Stellar Blade Tips for Hard Mode', 'Parry Timing - Frame Perfect Guide', 'Beta Skill Priority Guide', 'Most Common Mistakes New Players Make', 'Resource Farming & Upgrade Priority'],
+  },
+  // Dragon's Dogma 2 - High anticipation
+  'dragons-dogma-2': {
+    boss: ['Dragon Boss Strategy - All Encounters', 'Medusa Boss Fight Guide', 'Sphinx Riddle Solutions', 'Dullahan Boss Strategy', 'All Ur-Dragon Strategies'],
+    build: ['Best Vocation Tier List (2025)', 'Warrior Build - Maximum Damage', 'Sorcerer Build - Nuke Everything', 'Mystic Spearhand Build Guide', 'Best Pawn Inclination Setup'],
+    collectible: ['All Seekers Token Locations', 'All Portcrystal Locations', 'All Vocation Maister Locations', 'All Golden Trove Beetle Locations', 'All Sphinx Riddle Locations'],
+    walkthrough: ['Main Story Complete Walkthrough', 'All Vocation Unlock Quests', 'Unmoored World - Endgame Guide', 'True Ending Unlock Guide', 'All Side Quest Walkthrough'],
+    tips: ['20 Dragon Dogma 2 Tips That Save Hours', 'Pawn AI Behavior Explained', 'Most Common Build Mistakes', 'How to Farm Gold & RC Efficiently', 'Hidden Mechanics the Game Never Explains'],
+  },
+  // Elden Ring DLC
+  'elden-ring-shadow-of-the-erdtree': {
+    boss: ['Messmer the Impaler - Complete Strategy', 'Romina Saint of the Bud Boss Guide', 'Commander Gaius Boss Fight', 'Putrescent Knight Strategy', 'Final Boss - Radahn Phase Breakdown', 'Bayle the Dread Dragon Strategy', 'All Remembrance Boss Strategies'],
+    build: ['DLC Best Build Tier List (2025)', 'Milady Light Roll Build', 'Greatsword Stance Break Build', 'Hand-to-Hand Arts Build Guide', 'Perfume Bottle Build - DLC Meta', 'Best DLC Weapon Tier List'],
+    collectible: ['All Scadutree Fragment Locations', 'All Revered Spirit Ash Locations', 'All DLC Map Fragment Locations', 'All Shadow Realm Blessing Locations', 'All DLC Legendary Items', 'All Cross-Naginata & DLC Weapon Locations'],
+    walkthrough: ['DLC Starting Guide - Where to Go First', 'Gravesite Plain Complete Exploration', 'Scadu Altus Full Walkthrough', 'Shadow Keep - Complete Dungeon Guide', 'Enir-Ilim - Final Area Walkthrough', 'All NPC Questlines in the DLC'],
+    tips: ['20 DLC Tips That Will Save Your Sanity', 'Scadutree Blessing Level - How It Works', 'Best Early DLC Weapons to Get First', 'DLC Difficulty Scaling Explained', 'Most Common DLC Mistakes to Avoid'],
+  },
+  // Final Fantasy VII Rebirth
+  'final-fantasy-vii-rebirth': {
+    boss: ['Sephiroth Boss Strategy - Final Encounter', 'Gi Nattak Boss Guide', 'Jenova Lifeclinger Strategy', 'Weapons Boss Rush Guide', 'All VR Boss Battle Strategies'],
+    build: ['Best Party Composition Guide', 'Cloud Best Weapon & Materia Build', 'Tifa Stagger Build Guide', 'Aerith Healing & Support Build', 'Best Materia Combinations Tier List'],
+    collectible: ['All Moogle Medal Locations', 'All Protorelic Locations & Puzzles', 'All Cactuar Stamp Locations', 'All Summon Crystal Locations', 'All Intel & Survey Locations'],
+    walkthrough: ['Complete Story Walkthrough - All Chapters', 'Junon Region Full Guide', 'Corel Region All Activities', 'Gongaga Region Exploration', 'How to Unlock Hard Mode'],
+    tips: ['15 FF7 Rebirth Tips for Hard Mode', 'Stagger System Deep Dive', 'Synergy Ability Optimization', 'Most Common Materia Mistakes', 'Best Party Setup for Each Boss'],
+  },
+  // Helldivers 2 - Co-op hit
+  'helldivers-2': {
+    boss: ['Bile Titan Strategy - All Difficulties', 'Factory Stratagem Destroyer Guide', 'Charger Behemoth Counter Guide', 'Shrieker Nest Elimination Strategy', 'All Automaton Heavy Unit Strategies'],
+    build: ['Best Stratagem Loadout Tier List (2025)', 'Anti-Tank Build vs Bugs', 'Anti-Automaton Build Guide', 'Speedrunner Build for Missions', 'Best Support Stratagems for Level 9'],
+    collectible: ['All Planet Liberation Order Guide', 'All Warbond Unlock Content', 'All Ship Module Upgrade Priority', 'All Medal Farming Locations', 'All Super Credit Farming Guide'],
+    walkthrough: ['How to Complete Level 9 Missions Solo', 'Blitz Mission Strategy Guide', 'Eradicate Mission Optimization', 'Geological Survey Mission Guide', 'All Difficulty Scaling Explained'],
+    tips: ['20 Helldivers 2 Tips for Level 9', 'Dive & Prone - Survival Mechanics', 'Friendly Fire Avoidance Guide', 'Most Common Stratagem Mistakes', 'Optimal Team Composition for Each Faction'],
+  },
+  // Palworld - Viral survival craft
+  'palworld': {
+    boss: ['Zoe & Grizzbolt Boss Strategy', 'All Tower Boss Strategies', 'All Alpha Pal Locations & Strategies', 'Legendary Pal Boss Strategies', 'Raid Boss Counter Guide'],
+    build: ['Best Base Layout & Automation Guide', 'Best Working Pal Combinations', 'Best Combat Pal Team Build', 'Breeding Guide - Perfect IV Pals', 'Best Base Defense Setup'],
+    collectible: ['All Pal Locations & Spawn Maps', 'All Lifmunk Effigy Locations', 'All Fast Travel Statue Locations', 'All Skill Fruit Tree Locations', 'All Dungeon Locations & Loot'],
+    walkthrough: ['Early Game Progression Guide', 'Mid-Game Base Building Strategy', 'Endgame Boss Rush Walkthrough', 'All Tower Boss Locations', 'Oil Rig Assault Guide'],
+    tips: ['15 Palworld Tips for Efficient Base Building', 'Breeding Calculator & Perfect Combos', 'Most Common Base Design Mistakes', 'Pal Condensation & Soul Upgrade Priority', 'How to Farm Gold Efficiently'],
+  },
+  // Metaphor: ReFantazio
+  'metaphor-refantazio': {
+    boss: ['All Main Boss Strategy Guide', 'Optional Boss Encounters', 'Final Boss Phase Breakdown', 'Archetype Boss Counters', 'All Human Boss Strategies'],
+    build: ['Best Archetype Combinations Tier List', 'Mage Build Guide - Maximum Magic', 'Warrior Build - Physical Dominance', 'Healer Support Build', 'Best Party Composition Guide'],
+    collectible: ['All Relic Locations', 'All Gold Beetle Locations', 'All Recipe Locations', 'All Mask Locations', 'All Key Item Checklist'],
+    walkthrough: ['Complete Story Walkthrough', 'All Companion Questlines', 'All Dungeon Walkthroughs', 'Calendar Optimization Guide', 'How to Unlock True Ending'],
+    tips: ['15 Metaphor Tips for Maximum Efficiency', 'Archetype Synergy Guide', 'Most Common Build Mistakes', 'Calendar Management Strategy', 'Hidden Mechanics & Interactions'],
+  },
+  // Silent Hill 2 Remake
+  'silent-hill-2-remake': {
+    boss: ['Pyramid Head Boss Strategy - All Encounters', 'Flesh Lip Boss Guide', 'Abstract Daddy Boss Fight', 'Final Boss Strategy', 'All Boss Patterns & Weaknesses'],
+    build: ['Best Weapon Upgrade Priority', 'Melee-Only Challenge Guide', 'Speedrun Loadout Strategy', 'Best Ammo Conservation Build', 'Hard Difficulty Recommended Setup'],
+    collectible: ['All Memory Locations', 'All Key Item Locations', 'All Puzzle Solutions', 'All Secret & Hidden Room Locations', 'All Ending Requirements Guide'],
+    walkthrough: ['Complete Story Walkthrough', 'All Puzzle Solutions by Difficulty', 'All Ending Paths & Choices', 'Born From a Wish DLC Guide', 'NG+ Differences & Changes'],
+    tips: ['15 Silent Hill 2 Tips for Hard Mode', 'Combat Dodge Timing Guide', 'Ammo Conservation Strategies', 'Most Common Mistakes New Players Make', 'How to Get All 6 Endings'],
+  },
+  // Indiana Jones
+  'indiana-jones-great-circle': {
+    boss: ['All Boss Encounter Strategies', 'Major Boss Fight Guide', 'Final Boss Strategy', 'Arena Challenge Strategies'],
+    build: ['Best Adventure Loadout Guide', 'Stealth Build Strategy', 'Combat-Focused Build', 'Best Weapon Upgrades Priority'],
+    collectible: ['All Artifact Locations', 'All Secret Area Locations', 'All Collectible Checklist', 'All Hidden Chest Locations', 'All Puzzle Solutions Guide'],
+    walkthrough: ['Complete Story Walkthrough', 'All Side Quest Guide', 'All Puzzle Solutions', 'All Region Exploration Guide', 'How to Unlock All Content'],
+    tips: ['15 Indiana Jones Tips for Exploration', 'Stealth Mechanics Deep Dive', 'Most Common Mistakes to Avoid', 'Resource Management Guide', 'Combat Tips for Hard Encounters'],
+  },
 };
 
 // Fallback topics for games not in the database
@@ -382,6 +454,14 @@ export const TRENDING_TOPICS: TrendingTopic[] = [
   { gameSlug: 'resident-evil-4-remake', gameName: 'Resident Evil 4 Remake', topic: 'Separate Ways Professional S+ Rank Strategy', guideType: 'tips', priority: 7, keywords: ['resident evil 4', 'separate ways', 'professional s+', 'speedrun'] },
   { gameSlug: 'starfield', gameName: 'Starfield', topic: 'Shattered Space DLC Complete Walkthrough', guideType: 'walkthrough', priority: 6, keywords: ['starfield', 'shattered space', 'dlc', 'walkthrough'] },
   { gameSlug: 'zelda-totk', gameName: 'Zelda: Tears of the Kingdom', topic: 'All 152 Shrine Solutions Complete Guide', guideType: 'collectible', priority: 6, keywords: ['zelda totk', 'all shrines', 'shrine guide', 'solutions'] },
+  { gameSlug: 'black-myth-wukong', gameName: 'Black Myth: Wukong', topic: 'Erlang Shen Secret Boss Strategy - How to Unlock & Beat', guideType: 'boss', priority: 10, keywords: ['black myth wukong', 'erlang shen', 'secret boss', 'how to beat'] },
+  { gameSlug: 'black-myth-wukong', gameName: 'Black Myth: Wukong', topic: 'All Secret Areas & Hidden Paths Complete Guide', guideType: 'collectible', priority: 9, keywords: ['black myth wukong', 'secret areas', 'hidden paths', '100% guide'] },
+  { gameSlug: 'stellar-blade', gameName: 'Stellar Blade', topic: 'Best Beta Skill Combinations for Hard Mode', guideType: 'build', priority: 8, keywords: ['stellar blade', 'best build', 'beta skills', 'hard mode'] },
+  { gameSlug: 'dragons-dogma-2', gameName: "Dragon's Dogma 2", topic: 'Best Vocation Tier List & Build Guide (2025)', guideType: 'build', priority: 8, keywords: ['dragons dogma 2', 'best vocation', 'tier list', 'build guide'] },
+  { gameSlug: 'elden-ring-shadow-of-the-erdtree', gameName: 'Elden Ring DLC', topic: 'DLC Final Boss Radahn Complete Strategy', guideType: 'boss', priority: 10, keywords: ['elden ring dlc', 'radahn', 'final boss', 'erdtree'] },
+  { gameSlug: 'helldivers-2', gameName: 'Helldivers 2', topic: 'Best Stratagem Loadout for Level 9 Missions', guideType: 'build', priority: 7, keywords: ['helldivers 2', 'best stratagem', 'level 9', 'loadout'] },
+  { gameSlug: 'final-fantasy-vii-rebirth', gameName: 'FF7 Rebirth', topic: 'Best Materia Combinations & Party Setup', guideType: 'build', priority: 7, keywords: ['ff7 rebirth', 'materia', 'best party', 'build guide'] },
+  { gameSlug: 'palworld', gameName: 'Palworld', topic: 'Best Base Layout & Automation Guide', guideType: 'build', priority: 7, keywords: ['palworld', 'base layout', 'automation', 'best base'] },
 ];
 
 // ========================================

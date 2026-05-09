@@ -39,25 +39,32 @@ WORD COUNT: 2000-3000 words. Quality over quantity - every sentence earns its pl
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { gameId, topic, guideType, language = 'en' } = body as {
+    const { gameId, gameSlug, topic, guideType, language = 'en' } = body as {
       gameId?: number;
+      gameSlug?: string;
       topic?: string;
       guideType?: GuideType;
       language?: string;
     };
 
-    if (!gameId) {
+    // Resolve game by ID or slug
+    let gameQuery = 'SELECT id, name, slug, genre, description FROM games WHERE ';
+    let queryParams: (string | number)[] = [];
+    
+    if (gameId) {
+      gameQuery += 'id = $1';
+      queryParams = [gameId];
+    } else if (gameSlug) {
+      gameQuery += 'slug = $1';
+      queryParams = [gameSlug];
+    } else {
       return NextResponse.json(
-        { error: 'gameId is required' },
+        { error: 'gameId or gameSlug is required' },
         { status: 400 }
       );
     }
 
-    // Get game info
-    const gameResult = await query(
-      `SELECT id, name, slug, genre, description FROM games WHERE id = $1`,
-      [gameId]
-    );
+    const gameResult = await query(gameQuery, queryParams);
 
     if (gameResult.rows.length === 0) {
       return NextResponse.json(
@@ -67,12 +74,13 @@ export async function POST(request: NextRequest) {
     }
 
     const game = gameResult.rows[0];
-    const gameSlug = game.slug as string;
+    const resolvedGameId = game.id as number;
+    const resolvedGameSlug = game.slug as string;
 
     // Get existing article titles to avoid duplicates
     const existingResult = await query(
       `SELECT title FROM articles WHERE game_id = $1`,
-      [gameId]
+      [resolvedGameId]
     );
     const existingTitles = existingResult.rows.map((r: { title: string }) => r.title);
 
@@ -81,13 +89,13 @@ export async function POST(request: NextRequest) {
     let selectedGuideType = guideType;
 
     if (!selectedTopic) {
-      const topicResult = getTopicForGeneration(gameSlug, selectedGuideType, existingTitles);
+      const topicResult = getTopicForGeneration(resolvedGameSlug, selectedGuideType, existingTitles);
       if (topicResult) {
         selectedTopic = topicResult.topic;
         selectedGuideType = topicResult.guideType;
       } else {
         // Fallback: pick from all available topics
-        const allTopics = getTopicsForGame(gameSlug);
+        const allTopics = getTopicsForGame(resolvedGameSlug);
         selectedTopic = allTopics[Math.floor(Math.random() * allTopics.length)] || 'General gameplay guide';
         selectedGuideType = selectedGuideType || 'tips';
       }
@@ -102,7 +110,7 @@ export async function POST(request: NextRequest) {
     const guideTypeLabel = guideConfig?.label || 'Guide';
 
     // Build SEO keywords for this article
-    const trendingForGame = getTrendingTopicsForGame(gameSlug);
+    const trendingForGame = getTrendingTopicsForGame(resolvedGameSlug);
     const seoKeywords = [
       ...(guideConfig?.keywords || []),
       ...(trendingForGame.slice(0, 2).flatMap(t => t.keywords)),
@@ -197,7 +205,7 @@ Format your response as JSON:
       `INSERT INTO articles (game_id, title, slug, content, summary, status, language, meta_title, meta_description, keywords, author)
        VALUES ($1, $2, $3, $4, $5, 'generated', $6, $7, $8, $9, 'AI Editor')
        RETURNING id`,
-      [gameId, articleData.title, slug, articleData.content, articleData.summary, language, articleData.meta_title, articleData.meta_description, articleData.keywords]
+      [resolvedGameId, articleData.title, slug, articleData.content, articleData.summary, language, articleData.meta_title, articleData.meta_description, articleData.keywords]
     );
 
     const articleId = insertResult.rows[0]?.id;
@@ -205,7 +213,7 @@ Format your response as JSON:
     // Log the generation
     await query(
       `INSERT INTO generation_logs (article_id, game_id, prompt, model) VALUES ($1, $2, $3, $4)`,
-      [articleId, gameId, `Guide Type: ${selectedGuideType} | Topic: ${selectedTopic}`, 'doubao-seed-2-0-lite-260215']
+      [articleId, resolvedGameId, `Guide Type: ${selectedGuideType} | Topic: ${selectedTopic}`, 'doubao-seed-2-0-lite-260215']
     );
 
     return NextResponse.json({
