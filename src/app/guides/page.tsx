@@ -22,6 +22,7 @@ interface Article {
   created_at: string;
   game_name: string | null;
   game_slug: string | null;
+  cover_image_url: string | null;
 }
 
 async function getArticles(type?: string): Promise<Article[]> {
@@ -110,25 +111,52 @@ export default async function GuidesPage({
               const badge = getGuideBadge(article.keywords);
               return (
                 <Link key={article.id} href={`/guides/${article.slug}`} className="block group">
-                  <div className="game-card p-5 h-full flex flex-col">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className={badge.className}>{badge.label}</span>
-                      {article.game_name && (
-                        <span className="text-xs text-purple-400 font-medium">{article.game_name}</span>
+                  <div className="game-card overflow-hidden h-full flex flex-col">
+                    {article.cover_image_url ? (
+                      <div className="relative h-44 overflow-hidden">
+                        <img
+                          src={article.cover_image_url}
+                          alt={article.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                          width={400}
+                          height={220}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                        <div className="absolute top-3 left-3">
+                          <span className={badge.className}>{badge.label}</span>
+                        </div>
+                        {article.game_name && (
+                          <div className="absolute bottom-3 left-3">
+                            <span className="text-xs text-purple-300 font-semibold bg-black/50 px-2 py-0.5 rounded">{article.game_name}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 p-5 pb-0">
+                        <span className={badge.className}>{badge.label}</span>
+                        {article.game_name && (
+                          <span className="text-xs text-purple-400 font-medium">{article.game_name}</span>
+                        )}
+                      </div>
+                    )}
+                    <div className="p-5 flex flex-col flex-1">
+                      {!article.cover_image_url && article.game_name && (
+                        <span className="text-xs text-purple-400 font-medium mb-2">{article.game_name}</span>
                       )}
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-purple-300 transition-colors leading-snug font-display">
-                      {article.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mb-4 flex-1 leading-relaxed">
-                      {article.summary || truncateText(stripHtml(article.content), 150)}
-                    </p>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {article.published_at ? formatDate(article.published_at) : 'Recently'}
-                      </span>
-                      <span>{article.author}</span>
+                      <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-purple-300 transition-colors leading-snug font-display">
+                        {article.title}
+                      </h3>
+                      <p className="text-sm text-muted-foreground mb-4 flex-1 leading-relaxed">
+                        {article.summary || truncateText(stripHtml(article.content), 150)}
+                      </p>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {article.published_at ? formatDate(article.published_at) : 'Recently'}
+                        </span>
+                        <span>{article.author}</span>
+                      </div>
                     </div>
                   </div>
                 </Link>

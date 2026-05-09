@@ -25,6 +25,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         title: article.meta_title || article.title,
         description: article.meta_description || article.summary,
         type: 'article',
+        images: article.cover_image_url ? [{ url: article.cover_image_url, width: 1200, height: 630 }] : undefined,
         publishedTime: article.published_at,
         authors: [article.author || '3A Game Master'],
         tags: article.keywords || [],

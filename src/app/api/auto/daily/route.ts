@@ -19,19 +19,20 @@ export async function POST(request: NextRequest) {
     const { articlesPerDay = 3, startHour = 9, intervalHours = 3 } = body;
 
     // 1. Get all games
-    const gamesResult = await query<GameRow>('SELECT id, name, slug FROM games ORDER BY name');
-    const games = gamesResult.rows;
+    const gamesResult = await query('SELECT id, name, slug FROM games ORDER BY name');
+    const games = gamesResult.rows as GameRow[];
 
     if (games.length === 0) {
       return NextResponse.json({ error: 'No games in database' }, { status: 400 });
     }
 
     // 2. Get existing article titles and keywords to avoid duplicates
-    const existingResult = await query<ExistingRow>(
+    const existingResult = await query(
       'SELECT title, keywords FROM articles'
     );
-    const existingTitles = new Set(existingResult.rows.map(r => r.title));
-    const existingKeywords = existingResult.rows
+    const existingRows = existingResult.rows as ExistingRow[];
+    const existingTitles = new Set(existingRows.map(r => r.title));
+    const existingKeywords = existingRows
       .flatMap(r => r.keywords || []);
 
     // 3. Pick topics for generation - rotate through games, prioritize those with fewer articles
@@ -54,14 +55,14 @@ export async function POST(request: NextRequest) {
       for (const guideType of guideTypes) {
         if (plannedArticles.length >= articlesPerDay) break;
 
-        const topic = getTopicForGeneration(game.slug, guideType, existingTitles, existingKeywords);
-        if (topic) {
+        const topicResult = getTopicForGeneration(game.slug, guideType, [...existingTitles]);
+        if (topicResult) {
           plannedArticles.push({
             gameId: game.id,
             gameName: game.name,
             gameSlug: game.slug,
-            guideType,
-            topic,
+            guideType: topicResult.guideType,
+            topic: topicResult.topic,
           });
         }
       }

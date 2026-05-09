@@ -47,6 +47,7 @@ interface Article {
   author: string;
   published_at: string | null;
   created_at: string;
+  cover_image_url: string | null;
 }
 
 async function getGameData(slug: string): Promise<{ game: Game | null; articles: Article[] }> {
@@ -148,22 +149,41 @@ export default async function GameDetailPage({ params }: PageProps) {
               const badge = getGuideBadge(article.keywords);
               return (
                 <Link key={article.id} href={`/guides/${article.slug}`} className="block group">
-                  <div className="game-card p-5 h-full flex flex-col">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className={badge.className}>{badge.label}</span>
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-purple-300 transition-colors leading-snug font-display">
-                      {article.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mb-4 flex-1 leading-relaxed">
-                      {article.summary || truncateText(stripHtml(article.content), 150)}
-                    </p>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {article.published_at ? formatDate(article.published_at) : 'Recently'}
-                      </span>
-                      <span>{article.author}</span>
+                  <div className="game-card overflow-hidden h-full flex flex-col">
+                    {article.cover_image_url ? (
+                      <div className="relative h-40 overflow-hidden">
+                        <img
+                          src={article.cover_image_url}
+                          alt={article.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                          width={400}
+                          height={200}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                        <div className="absolute top-3 left-3">
+                          <span className={badge.className}>{badge.label}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 p-5 pb-0">
+                        <span className={badge.className}>{badge.label}</span>
+                      </div>
+                    )}
+                    <div className="p-5 flex flex-col flex-1">
+                      <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-purple-300 transition-colors leading-snug font-display">
+                        {article.title}
+                      </h3>
+                      <p className="text-sm text-muted-foreground mb-4 flex-1 leading-relaxed">
+                        {article.summary || truncateText(stripHtml(article.content), 150)}
+                      </p>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {article.published_at ? formatDate(article.published_at) : 'Recently'}
+                        </span>
+                        <span>{article.author}</span>
+                      </div>
                     </div>
                   </div>
                 </Link>

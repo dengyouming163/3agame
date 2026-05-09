@@ -111,9 +111,50 @@ export default async function HomePage() {
       {featured && (
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6">
           <Link href={`/guides/${featured.slug}`} className="block group">
-            <div className="game-card p-6 sm:p-8">
-              <div className="flex flex-col lg:flex-row gap-6">
-                <div className="flex-1">
+            <div className="game-card overflow-hidden">
+              {featured.cover_image_url ? (
+                <div className="relative">
+                  <img
+                    src={featured.cover_image_url}
+                    alt={featured.title}
+                    className="w-full h-64 sm:h-80 object-cover"
+                    width={1200}
+                    height={630}
+                    fetchPriority="high"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-8">
+                    <div className="flex items-center gap-2 mb-3">
+                      {(() => {
+                        const badge = getGuideBadge(featured.keywords);
+                        return <span className={badge.className}>{badge.label}</span>;
+                      })()}
+                      <span className="flex items-center gap-1 text-xs text-amber-400 font-semibold">
+                        <Flame className="h-3 w-3" /> FEATURED
+                      </span>
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3 font-display group-hover:text-purple-300 transition-colors leading-tight">
+                      {featured.title}
+                    </h2>
+                    {featured.summary && (
+                      <p className="text-gray-300 mb-4 leading-relaxed line-clamp-2">
+                        {featured.summary}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-4 text-sm text-gray-400">
+                      {featured.game_name && (
+                        <span className="text-purple-400 font-medium">{featured.game_name}</span>
+                      )}
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" />
+                        {featured.published_at ? formatDate(featured.published_at) : 'Recently'}
+                      </span>
+                      <span>By {featured.author}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 sm:p-8">
                   <div className="flex items-center gap-2 mb-3">
                     {(() => {
                       const badge = getGuideBadge(featured.keywords);
@@ -141,11 +182,11 @@ export default async function HomePage() {
                     </span>
                     <span>By {featured.author}</span>
                   </div>
+                  <div className="flex items-center text-purple-400 group-hover:text-cyan-400 transition-colors mt-3">
+                    <ChevronRight className="h-6 w-6" />
+                  </div>
                 </div>
-                <div className="flex items-center text-purple-400 group-hover:text-cyan-400 transition-colors">
-                  <ChevronRight className="h-6 w-6" />
-                </div>
-              </div>
+              )}
             </div>
           </Link>
         </section>
@@ -169,25 +210,47 @@ export default async function HomePage() {
               const badge = getGuideBadge(article.keywords);
               return (
                 <Link key={article.id} href={`/guides/${article.slug}`} className="block group">
-                  <div className="game-card p-5 h-full flex flex-col">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className={badge.className}>{badge.label}</span>
-                      {article.game_name && (
-                        <span className="text-xs text-purple-400 font-medium">{article.game_name}</span>
+                  <div className="game-card overflow-hidden h-full flex flex-col">
+                    {article.cover_image_url ? (
+                      <div className="relative h-40 overflow-hidden">
+                        <img
+                          src={article.cover_image_url}
+                          alt={article.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                          width={400}
+                          height={200}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                        <div className="absolute top-3 left-3">
+                          <span className={badge.className}>{badge.label}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 p-5 pb-0">
+                        <span className={badge.className}>{badge.label}</span>
+                      </div>
+                    )}
+                    <div className="p-5 flex flex-col flex-1">
+                      {!article.cover_image_url && article.game_name && (
+                        <span className="text-xs text-purple-400 font-medium mb-2">{article.game_name}</span>
                       )}
-                    </div>
-                    <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-purple-300 transition-colors leading-snug font-display">
-                      {article.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mb-4 flex-1 leading-relaxed">
-                      {article.summary || truncateText(stripHtml(article.content), 150)}
-                    </p>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {article.published_at ? formatDate(article.published_at) : 'Recently'}
-                      </span>
-                      <span>{article.author}</span>
+                      {article.cover_image_url && article.game_name && (
+                        <span className="text-xs text-purple-400 font-medium mb-2">{article.game_name}</span>
+                      )}
+                      <h3 className="text-lg font-bold text-foreground mb-2 group-hover:text-purple-300 transition-colors leading-snug font-display">
+                        {article.title}
+                      </h3>
+                      <p className="text-sm text-muted-foreground mb-4 flex-1 leading-relaxed">
+                        {article.summary || truncateText(stripHtml(article.content), 150)}
+                      </p>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {article.published_at ? formatDate(article.published_at) : 'Recently'}
+                        </span>
+                        <span>{article.author}</span>
+                      </div>
                     </div>
                   </div>
                 </Link>

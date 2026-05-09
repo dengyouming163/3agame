@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
+import { LLMClient, Config, HeaderUtils, ImageGenerationClient } from 'coze-coding-dev-sdk';
 import { query } from '@/lib/db';
+import { uploadImageFromUrl } from '@/lib/storage';
 import {
   GAME_TOPICS,
   GUIDE_TYPES,
@@ -216,6 +217,39 @@ Format your response as JSON:
       [articleId, resolvedGameId, `Guide Type: ${selectedGuideType} | Topic: ${selectedTopic}`, 'doubao-seed-2-0-lite-260215']
     );
 
+    // Auto-generate cover image (non-blocking - won't fail article if image fails)
+    let coverImageKey: string | null = null;
+    try {
+      const imagePrompt = `Epic cinematic game art for "${game.name}" ${guideTypeLabel}: ${selectedTopic}. Dark fantasy style, dramatic lighting, high contrast, game key art aesthetic. Professional quality digital painting with neon purple and cyan accents on dark background. No text, no watermarks. 16:9 aspect ratio.`;
+
+      const imageClient = new ImageGenerationClient(config, customHeaders);
+      const imageResponse = await imageClient.generate({
+        prompt: imagePrompt,
+        size: '2K',
+        watermark: false,
+      });
+
+      const imageHelper = imageClient.getResponseHelper(imageResponse);
+
+      if (imageHelper.success && imageHelper.imageUrls.length > 0) {
+        const imageUrl = imageHelper.imageUrls[0];
+        // Upload to our object storage for permanent CDN access
+        const uploadResult = await uploadImageFromUrl(imageUrl);
+
+        if (uploadResult) {
+          coverImageKey = uploadResult;
+          // Update article with cover image
+          await query(
+            `UPDATE articles SET cover_image_key = $1 WHERE id = $2`,
+            [coverImageKey, articleId]
+          );
+        }
+      }
+    } catch (imageError) {
+      // Image generation failure should not block article creation
+      console.error('Cover image generation failed:', imageError instanceof Error ? imageError.message : 'Unknown error');
+    }
+
     return NextResponse.json({
       success: true,
       article: {
@@ -224,6 +258,7 @@ Format your response as JSON:
         slug,
         guideType: selectedGuideType,
         topic: selectedTopic,
+        coverImageKey,
       },
     });
   } catch (error) {

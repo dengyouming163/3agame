@@ -59,10 +59,43 @@ export async function uploadImage(
  * Upload image from a URL (e.g., AI-generated image URL) to object storage.
  * Returns the storage key.
  */
-export async function uploadImageFromUrl(url: string): Promise<string> {
-  const storage = getStorage();
-  const key = await storage.uploadFromUrl({ url, timeout: 60000 });
-  return key;
+export async function uploadImageFromUrl(url: string): Promise<string | null> {
+  try {
+    const storage = getStorage();
+    const result = await storage.uploadFromUrl({ url, timeout: 60000 });
+    // The SDK returns the generated key
+    return result || null;
+  } catch (error) {
+    console.error('Upload from URL failed:', error instanceof Error ? error.message : 'Unknown error');
+    return null;
+  }
+}
+
+/**
+ * Get a publicly accessible image URL for display.
+ * Handles three cases:
+ * 1. Object storage key (e.g., "articles/elden-ring/slug-cover.png") → signed URL
+ * 2. Full URL (https://...) → return as-is
+ * 3. Empty/null → placeholder
+ */
+export async function getImageUrl(key: string | null | undefined): Promise<string> {
+  if (!key) return '/placeholder-image.svg';
+  if (key.startsWith('http://') || key.startsWith('https://')) return key;
+  // It's an object storage key - generate signed URL
+  return getCachedImageUrl(key);
+}
+
+/**
+ * Get image URL synchronously (for SSR without await).
+ * Only works for full URLs or local paths, not storage keys.
+ * For storage keys, use getImageUrl() instead.
+ */
+export function getImageUrlSync(key: string | null | undefined): string {
+  if (!key) return '/placeholder-image.svg';
+  if (key.startsWith('http://') || key.startsWith('https://')) return key;
+  if (key.startsWith('/')) return key;
+  // It's a storage key - return placeholder, will be resolved client-side
+  return '/placeholder-image.svg';
 }
 
 /**

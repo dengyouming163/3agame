@@ -4,8 +4,7 @@ import path from 'path';
 const nextConfig: NextConfig = {
   // Cloudflare Pages compatibility: use standalone output
   // When deploying to CF Pages, use @cloudflare/next-on-pages which handles this
-  outputFileTracingRoot: path.resolve(__dirname, '../../'),
-
+  // outputFileTracingRoot: path.resolve(__dirname, '../../'),
   images: {
     // Disable Next.js Image Optimization - we use object storage + CDN instead
     // This is important for Cloudflare Pages compatibility
