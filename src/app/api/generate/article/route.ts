@@ -179,6 +179,7 @@ Format your response as JSON:
 
     try {
       const contentStr = response.content;
+      // Try to extract and parse JSON from the LLM response
       const jsonMatch = contentStr.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         articleData = JSON.parse(jsonMatch[0]);
@@ -186,10 +187,48 @@ Format your response as JSON:
         throw new Error('No JSON found in response');
       }
     } catch {
+      // JSON parse failed (truncated or malformed) - try to extract content field manually
+      const contentStr = response.content;
+      let extractedContent = contentStr;
+      let extractedTitle = `${game.name}: ${selectedTopic} - ${guideTypeLabel} (2025)`;
+      let extractedSummary = `Ultimate ${guideTypeLabel.toLowerCase()} for ${game.name} covering ${selectedTopic.toLowerCase()}. Expert strategies, detailed breakdowns, and pro tips.`;
+
+      // Try to extract "content" field from malformed JSON
+      const contentFieldMatch = contentStr.match(/"content"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"(?:summary|meta_title|meta_description|keywords)"|\s*\}\s*$)/);
+      if (contentFieldMatch) {
+        // Unescape the content string
+        extractedContent = contentFieldMatch[1]
+          .replace(/\\n/g, '\n')
+          .replace(/\\"/g, '"')
+          .replace(/\\\\/g, '\\');
+      } else if (contentStr.trim().startsWith('{')) {
+        // Last resort: the entire response is JSON-like but broken
+        // Try to find any HTML content between quotes after "content":
+        const htmlMatch = contentStr.match(/"content"\s*:\s*"([\s\S]*)/);
+        if (htmlMatch) {
+          extractedContent = htmlMatch[1]
+            .replace(/\\n/g, '\n')
+            .replace(/\\"/g, '"')
+            .replace(/\\\\/g, '\\')
+            // Remove trailing broken JSON artifacts
+            .replace(/"\s*\}?\s*$/, '')
+            .replace(/,\s*"(?:summary|meta_title|meta_description|keywords)"[\s\S]*$/, '');
+        }
+      } else {
+        // Pure HTML content (not wrapped in JSON)
+        extractedContent = contentStr;
+      }
+
+      // Try to extract title from JSON
+      const titleMatch = contentStr.match(/"title"\s*:\s*"([^"]*)"/);
+      if (titleMatch) {
+        extractedTitle = titleMatch[1];
+      }
+
       articleData = {
-        title: `${game.name}: ${selectedTopic} - ${guideTypeLabel} (2025)`,
-        content: response.content,
-        summary: `Ultimate ${guideTypeLabel.toLowerCase()} for ${game.name} covering ${selectedTopic.toLowerCase()}. Expert strategies, detailed breakdowns, and pro tips.`,
+        title: extractedTitle,
+        content: extractedContent,
+        summary: extractedSummary,
         meta_title: `${game.name} ${selectedTopic} - ${guideTypeLabel}`,
         meta_description: `Master ${game.name} with our expert ${guideTypeLabel.toLowerCase()} on ${selectedTopic.toLowerCase()}. Detailed strategies, tips, and walkthrough for hardcore gamers.`,
         keywords: [game.name.toLowerCase(), selectedTopic.toLowerCase(), guideTypeLabel.toLowerCase(), 'guide', (game.genre as string)?.toLowerCase() || 'rpg'],
