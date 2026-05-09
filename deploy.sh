@@ -8,7 +8,8 @@ set -euo pipefail
 
 # ─── 项目配置 ───
 PROJECT_NAME="3agamemaster"
-PROJECT_DIR="/www/wwwroot/3agamemaster.com"
+PROJECT_DIR="/www/wwwroot/3agamaster.com"
+GIT_REPO="https://github.com/dengyouming163/3agame.git"
 APP_PORT=3000
 NODE_ENV="production"
 
@@ -96,7 +97,26 @@ cmd_install() {
 
   echo ""
   ok "=== 环境安装完成 ==="
-  info "下一步: 将代码推送到 $PROJECT_DIR，然后运行 bash deploy.sh update"
+  info "下一步: bash deploy.sh clone  (克隆代码)"
+  info "       bash deploy.sh update  (构建+启动)"
+}
+
+# ─── Step 0.5: 克隆代码 ───
+cmd_clone() {
+  info "=== 克隆代码 ==="
+
+  if [ -d "$PROJECT_DIR/.git" ]; then
+    ok "代码已存在，执行 pull..."
+    cd "$PROJECT_DIR"
+    git pull origin main
+  else
+    info "克隆仓库 $GIT_REPO ..."
+    mkdir -p "$PROJECT_DIR"
+    git clone "$GIT_REPO" "$PROJECT_DIR"
+    cd "$PROJECT_DIR"
+  fi
+
+  ok "代码就绪"
 }
 
 # ─── Step 1: 构建 ───
@@ -222,6 +242,7 @@ cmd_logs() {
 
 # ─── 主入口 ───
 case "${1:-help}" in
+  clone)    cmd_clone   ;;
   install)  cmd_install  ;;
   build)    cmd_build    ;;
   restart)  cmd_restart  ;;
@@ -234,6 +255,7 @@ case "${1:-help}" in
     echo "用法: bash deploy.sh <命令>"
     echo ""
     echo "命令:"
+    echo "  clone     克隆/更新代码 (首次部署用)"
     echo "  install   首次安装 (Node.js + pnpm + PM2)"
     echo "  build     构建项目"
     echo "  restart   重启服务"
