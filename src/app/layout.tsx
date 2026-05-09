@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Link from 'next/link';
-import { Swords, Gamepad2, Shield, Map, Lightbulb } from 'lucide-react';
+import { Swords, Gamepad2, Shield, Map as MapIcon, Lightbulb } from 'lucide-react';
 import { MobileNav } from '@/components/mobile-nav';
 
 export const metadata: Metadata = {
@@ -9,23 +9,57 @@ export const metadata: Metadata = {
     default: '3A Game Master | Ultimate AAA Game Guides, Boss Strategies & Walkthroughs',
     template: '%s | 3A Game Master',
   },
-  description: 'The ultimate destination for AAA game guides. Boss strategies, build guides, collectible walkthroughs, and hidden secrets for Elden Ring, Baldur\'s Gate 3, Final Fantasy, and more.',
-  keywords: ['3A game guides', 'AAA game walkthrough', 'boss strategy guide', 'best game builds', 'hidden endings', 'collectible guides', 'Elden Ring guide', 'Baldur\'s Gate 3 guide'],
+  description: 'The ultimate destination for AAA game guides. Boss strategies, build guides, collectible walkthroughs, and hidden secrets for Elden Ring, Baldur\'s Gate 3, Final Fantasy, God of War, and more top-tier single-player games.',
+  keywords: [
+    '3A game guides', 'AAA game walkthrough', 'boss strategy guide', 'best game builds',
+    'hidden endings', 'collectible guides', 'Elden Ring guide', 'Baldur\'s Gate 3 guide',
+    'Final Fantasy XVI guide', 'God of War Ragnarok guide', 'Cyberpunk 2077 guide',
+    'Diablo IV guide', 'Resident Evil 4 guide', 'Starfield guide',
+    'single player game tips', 'how to beat boss', 'all collectibles guide',
+    'no damage walkthrough', 'platinum trophy guide', 'secret ending unlock',
+  ],
+  authors: [{ name: '3A Game Master', url: 'https://3agamemaster.com' }],
+  creator: '3A Game Master',
+  publisher: '3A Game Master',
+  metadataBase: new URL('https://3agamemaster.com'),
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
     type: 'website',
     locale: 'en_US',
     siteName: '3A Game Master',
     title: '3A Game Master | Ultimate AAA Game Guides',
     description: 'The ultimate destination for AAA game guides, boss strategies, and walkthroughs.',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: '3A Game Master - Ultimate AAA Game Guides',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: '3A Game Master | Ultimate AAA Game Guides',
     description: 'Boss strategies, build guides, and walkthroughs for top AAA games.',
+    images: ['/og-image.png'],
   },
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  verification: {
+    // Add your verification codes here when deploying
+    // google: 'your-google-verification-code',
   },
 };
 
@@ -40,7 +74,7 @@ const NAV_LINKS = [
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   swords: Swords,
   shield: Shield,
-  map: Map,
+  map: MapIcon,
   gamepad2: Gamepad2,
   lightbulb: Lightbulb,
 };
@@ -55,6 +89,31 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="min-h-screen bg-background antialiased">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'WebSite',
+              name: '3A Game Master',
+              url: 'https://3agamemaster.com',
+              description: 'The ultimate destination for AAA game guides, boss strategies, build guides, and walkthroughs.',
+              potentialAction: {
+                '@type': 'SearchAction',
+                target: 'https://3agamemaster.com/guides?q={search_term_string}',
+                'query-input': 'required name=search_term_string',
+              },
+              publisher: {
+                '@type': 'Organization',
+                name: '3A Game Master',
+                logo: {
+                  '@type': 'ImageObject',
+                  url: 'https://3agamemaster.com/logo.png',
+                },
+              },
+            }),
+          }}
+        />
         {/* Top Navigation */}
         <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-lg">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

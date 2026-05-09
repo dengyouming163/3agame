@@ -1,7 +1,6 @@
 import { Pool, PoolConfig } from 'pg';
 
 // Load platform environment variables (PGDATABASE_URL, etc.)
-// This uses coze_workload_identity to fetch credentials at runtime
 let envLoaded = false;
 async function loadPlatformEnv(): Promise<void> {
   if (envLoaded) return;
@@ -102,6 +101,8 @@ export interface GenerationLog {
   generated_at: string;
 }
 
+// ─── Connection Pool Management ───
+
 let pool: Pool | null = null;
 let poolInitPromise: Promise<Pool> | null = null;
 
@@ -110,6 +111,11 @@ function getConnectionString(): string {
   // 1. DATABASE_URL (production: your PG server at 123.207.50.64)
   // 2. PGDATABASE_URL (development: platform-injected Supabase PG)
   return process.env.DATABASE_URL || process.env.PGDATABASE_URL || '';
+}
+
+function isProductionDB(connectionString: string): boolean {
+  // Detect if connecting to the production PostgreSQL server
+  return connectionString.includes('123.207.50.64');
 }
 
 async function createPool(): Promise<Pool> {
@@ -121,12 +127,19 @@ async function createPool(): Promise<Pool> {
     throw new Error('DATABASE_URL or PGDATABASE_URL environment variable is not set');
   }
 
+  const isProd = isProductionDB(connectionString);
+
   const config: PoolConfig = {
     connectionString,
-    max: 10,
+    // Production: more connections for higher throughput
+    // Development: fewer connections for resource efficiency
+    max: isProd ? 20 : 10,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
-    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 10000,
+    // Production server may need SSL
+    ssl: isProd
+      ? { rejectUnauthorized: false }
+      : { rejectUnauthorized: false },
   };
 
   const newPool = new Pool(config);
@@ -139,7 +152,7 @@ async function createPool(): Promise<Pool> {
   try {
     const client = await newPool.connect();
     client.release();
-    console.log('Database connected successfully');
+    console.log(`Database connected successfully (${isProd ? 'production' : 'development'})`);
   } catch (err) {
     const error = err as Error;
     console.error('Database connection test failed:', error.message);
@@ -180,17 +193,50 @@ async function getPool(): Promise<Pool> {
   return poolInitPromise;
 }
 
+// ─── Query Helper ───
+
 export async function query(text: string, params?: unknown[]) {
   const start = Date.now();
   try {
     const db = await getPool();
     const result = await db.query(text, params);
     const duration = Date.now() - start;
-    console.log('Executed query', { text: text.slice(0, 80), duration, rows: result.rowCount });
+    if (duration > 1000) {
+      console.warn('Slow query', { text: text.slice(0, 80), duration, rows: result.rowCount });
+    } else {
+      console.log('Executed query', { text: text.slice(0, 80), duration, rows: result.rowCount });
+    }
     return result;
   } catch (error) {
     const err = error as Error;
-    console.error('Database query error:', err.message);
+    console.error('Database query error:', err.message, 'Query:', text.slice(0, 100));
     throw error;
+  }
+}
+
+// ─── Health Check ───
+
+export async function checkDatabaseHealth(): Promise<{
+  connected: boolean;
+  latencyMs: number;
+  isProduction: boolean;
+  error?: string;
+}> {
+  try {
+    const start = Date.now();
+    await query('SELECT 1');
+    const connectionString = getConnectionString();
+    return {
+      connected: true,
+      latencyMs: Date.now() - start,
+      isProduction: isProductionDB(connectionString),
+    };
+  } catch (err) {
+    return {
+      connected: false,
+      latencyMs: -1,
+      isProduction: false,
+      error: (err as Error).message,
+    };
   }
 }

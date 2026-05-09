@@ -26,11 +26,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  // Fetch dynamic pages
+  // Fetch dynamic pages from internal API
   try {
     const [gamesRes, articlesRes] = await Promise.all([
       fetch(`${baseUrl}/api/games`, { next: { revalidate: 3600 } }),
-      fetch(`${baseUrl}/api/articles?status=published&limit=100`, { next: { revalidate: 3600 } }),
+      fetch(`${baseUrl}/api/articles?status=published&limit=200`, { next: { revalidate: 3600 } }),
     ]);
 
     const gamePages: MetadataRoute.Sitemap = [];
@@ -42,7 +42,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       for (const game of games) {
         gamePages.push({
           url: `${baseUrl}/games/${game.slug}`,
-          lastModified: new Date(),
+          lastModified: new Date(game.updated_at || Date.now()),
           changeFrequency: 'weekly',
           priority: 0.7,
         });
@@ -55,9 +55,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       for (const article of articles) {
         articlePages.push({
           url: `${baseUrl}/guides/${article.slug}`,
-          lastModified: article.published_at ? new Date(article.published_at) : new Date(),
+          lastModified: new Date(article.updated_at || article.published_at || Date.now()),
           changeFrequency: 'monthly',
-          priority: 0.6,
+          priority: 0.8,
         });
       }
     }

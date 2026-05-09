@@ -113,8 +113,44 @@ export default async function GuidePage({ params }: PageProps) {
   const badge = getGuideBadge(article.keywords);
   const readingTime = getReadingTime(article.content);
 
+  // JSON-LD structured data for SEO
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: article.meta_title || article.title,
+    description: article.meta_description || article.summary || '',
+    image: article.cover_image_url || undefined,
+    author: {
+      '@type': 'Organization',
+      name: article.author || '3A Game Master',
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: '3A Game Master',
+      logo: {
+        '@type': 'ImageObject',
+        url: 'https://3agamemaster.com/logo.png',
+      },
+    },
+    datePublished: article.published_at || undefined,
+    dateModified: article.published_at || undefined,
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': `https://3agamemaster.com/guides/${article.slug}`,
+    },
+    keywords: article.keywords?.join(', ') || undefined,
+    articleSection: article.game_name || 'Game Guides',
+    wordCount: stripHtml(article.content).split(/\s+/).length,
+  };
+
   return (
     <div className="min-h-screen">
+      {/* JSON-LD Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
       {/* Article Header */}
       <header className="hero-pattern border-b border-border">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -183,7 +219,9 @@ export default async function GuidePage({ params }: PageProps) {
               src={article.cover_image_url}
               alt={article.title}
               className="w-full h-auto object-cover max-h-[400px]"
-              loading="eager"
+              width={1200}
+              height={630}
+              fetchPriority="high"
             />
           </div>
         )}
