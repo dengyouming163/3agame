@@ -9,6 +9,9 @@
     "lint": "eslint",
     "lint:build": "eslint . --quiet",
     "start": "bash ./scripts/start.sh",
+    "start:prod": "NODE_ENV=production node -r dotenv/config dist/server.js dotenv_config_path=.env.production",
+    "build:server": "npx tsup src/server.ts --format cjs --platform node --target node20 --outDir dist --no-splitting",
+    "build:prod": "pnpm install && pnpm next build && pnpm build:server",
     "ts-check": "tsc -p tsconfig.json",
     "validate": "pnpm run --parallel '/^(ts-check|lint:build)$/'"
   },
