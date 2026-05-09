@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getClient } from '@/lib/db';
+import { query } from '@/lib/db';
 import { getStorage } from '@/lib/storage';
 
 export async function GET(
@@ -10,29 +10,25 @@ export async function GET(
     const { id } = await params;
     const articleId = parseInt(id, 10);
 
-    const client = getClient();
-    const { data, error } = await client
-      .from('articles')
-      .select('id, game_id, title, slug, content, summary, cover_image_key, status, language, meta_title, meta_description, keywords, author, published_at, scheduled_at, created_at, updated_at, games(name, slug)')
-      .eq('id', articleId)
-      .maybeSingle();
-    if (error) throw new Error(`Failed to fetch article: ${error.message}`);
+    const result = await query(
+      `SELECT a.id, a.game_id, a.title, a.slug, a.content, a.summary, a.cover_image_key,
+        a.status, a.language, a.meta_title, a.meta_description, a.keywords, a.author,
+        a.published_at, a.scheduled_at, a.created_at, a.updated_at,
+        g.name as game_name, g.slug as game_slug
+       FROM articles a
+       LEFT JOIN games g ON a.game_id = g.id
+       WHERE a.id = $1`,
+      [articleId]
+    );
 
-    if (!data) {
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { error: 'Article not found' },
         { status: 404 }
       );
     }
 
-    // Flatten the games relation
-    const gameData = data.games as unknown as { name: string; slug: string } | null;
-    const { games: _games, ...articleFields } = data;
-    const article = {
-      ...articleFields,
-      game_name: gameData?.name || null,
-      game_slug: gameData?.slug || null,
-    };
+    const article = result.rows[0];
 
     // Generate signed URL for cover image if exists
     let coverImageUrl: string | null = null;
@@ -79,34 +75,37 @@ export async function PUT(
       'keywords', 'scheduled_at', 'published_at',
     ];
 
-    const updates: Record<string, unknown> = {};
+    const setClauses: string[] = [];
+    const values: unknown[] = [];
+    let paramIdx = 1;
+
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
-        updates[field] = body[field];
+        setClauses.push(`${field} = $${paramIdx++}`);
+        values.push(body[field]);
       }
     }
 
-    if (Object.keys(updates).length === 0) {
+    // If publishing, set published_at
+    if (body.status === 'published' && !body.published_at) {
+      setClauses.push(`published_at = $${paramIdx++}`);
+      values.push(new Date().toISOString());
+    }
+
+    if (setClauses.length === 0) {
       return NextResponse.json(
         { error: 'No valid fields to update' },
         { status: 400 }
       );
     }
 
-    // If publishing, set published_at
-    if (updates.status === 'published' && !updates.published_at) {
-      updates.published_at = new Date().toISOString();
-    }
+    values.push(articleId);
+    const result = await query(
+      `UPDATE articles SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $${paramIdx} RETURNING id`,
+      values
+    );
 
-    const client = getClient();
-    const { data, error } = await client
-      .from('articles')
-      .update(updates)
-      .eq('id', articleId)
-      .select('id');
-    if (error) throw new Error(`Failed to update article: ${error.message}`);
-
-    if (!data || data.length === 0) {
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { error: 'Article not found' },
         { status: 404 }
@@ -115,7 +114,7 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      article: { id: data[0].id },
+      article: { id: result.rows[0].id },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -135,17 +134,18 @@ export async function DELETE(
     const { id } = await params;
     const articleId = parseInt(id, 10);
 
-    const client = getClient();
-
     // Delete related queue items first
-    await client.from('publish_queue').delete().eq('article_id', articleId);
+    await query('DELETE FROM publish_queue WHERE article_id = $1', [articleId]);
 
     // Delete the article
-    const { error } = await client
-      .from('articles')
-      .delete()
-      .eq('id', articleId);
-    if (error) throw new Error(`Failed to delete article: ${error.message}`);
+    const result = await query('DELETE FROM articles WHERE id = $1 RETURNING id', [articleId]);
+
+    if (result.rows.length === 0) {
+      return NextResponse.json(
+        { error: 'Article not found' },
+        { status: 404 }
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

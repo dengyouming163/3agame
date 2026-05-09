@@ -1,65 +1,77 @@
 import { NextResponse } from 'next/server';
-import { getClient } from '@/lib/db';
+import { query } from '@/lib/db';
 
 export async function GET() {
   try {
-    const client = getClient();
-
     // Get article status counts
-    const { data: allArticles, error: articlesError } = await client
-      .from('articles')
-      .select('status');
-    if (articlesError) throw new Error(`Failed to fetch articles: ${articlesError.message}`);
-
-    const statusCounts: Record<string, number> = {};
-    for (const row of (allArticles || [])) {
-      const s = row.status as string;
-      statusCounts[s] = (statusCounts[s] || 0) + 1;
+    const statusResult = await query(
+      `SELECT status, COUNT(*)::int as count FROM articles GROUP BY status`
+    );
+    const articlesByStatus: Record<string, number> = {};
+    for (const row of statusResult.rows) {
+      articlesByStatus[row.status] = row.count;
     }
+    const totalArticles = Object.values(articlesByStatus).reduce((a, b) => a + b, 0);
 
     // Get total games count
-    const { count: totalGames, error: gamesError } = await client
-      .from('games')
-      .select('*', { count: 'exact', head: true });
-    if (gamesError) throw new Error(`Failed to count games: ${gamesError.message}`);
+    const gamesResult = await query('SELECT COUNT(*)::int as count FROM games');
+    const totalGames = gamesResult.rows[0]?.count || 0;
 
     // Get queue status counts
-    const { data: allQueue, error: queueError } = await client
-      .from('publish_queue')
-      .select('status');
-    if (queueError) throw new Error(`Failed to fetch queue: ${queueError.message}`);
-
-    const queueCounts: Record<string, number> = {};
-    for (const row of (allQueue || [])) {
-      const s = row.status as string;
-      queueCounts[s] = (queueCounts[s] || 0) + 1;
+    const queueResult = await query(
+      `SELECT status, COUNT(*)::int as count FROM publish_queue GROUP BY status`
+    );
+    const queueByStatus: Record<string, number> = {};
+    for (const row of queueResult.rows) {
+      queueByStatus[row.status] = row.count;
     }
 
     // Get recent articles with game info
-    const { data: recentArticles, error: recentError } = await client
-      .from('articles')
-      .select('id, game_id, title, slug, content, summary, cover_image_key, status, language, meta_title, meta_description, keywords, author, published_at, scheduled_at, created_at, updated_at, games(name)')
-      .order('created_at', { ascending: false })
-      .limit(5);
-    if (recentError) throw new Error(`Failed to fetch recent articles: ${recentError.message}`);
+    const recentResult = await query(
+      `SELECT a.id, a.game_id, a.title, a.slug, a.summary, a.status, a.author,
+        a.published_at, a.created_at,
+        g.name as game_name
+       FROM articles a
+       LEFT JOIN games g ON a.game_id = g.id
+       ORDER BY a.created_at DESC
+       LIMIT 5`
+    );
 
-    const flattenedArticles = (recentArticles || []).map((row: Record<string, unknown>) => {
-      const gameData = row.games as { name: string } | null;
-      const { games: _games, ...rest } = row;
-      return {
-        ...rest,
-        game_name: gameData?.name || null,
-      };
-    });
+    // Get top games by article count
+    const topGamesResult = await query(
+      `SELECT g.name, g.slug, COUNT(a.id)::int as article_count
+       FROM games g
+       JOIN articles a ON g.id = a.game_id
+       GROUP BY g.id
+       ORDER BY article_count DESC
+       LIMIT 5`
+    );
+
+    // Get today's published count
+    const todayResult = await query(
+      `SELECT COUNT(*)::int as count FROM articles
+       WHERE status = 'published' AND published_at >= CURRENT_DATE`
+    );
+    const todayPublished = todayResult.rows[0]?.count || 0;
+
+    // Get this week's generated count
+    const weekResult = await query(
+      `SELECT COUNT(*)::int as count FROM articles
+       WHERE created_at >= DATE_TRUNC('week', CURRENT_DATE)`
+    );
+    const weekGenerated = weekResult.rows[0]?.count || 0;
 
     return NextResponse.json({
       stats: {
-        totalArticles: Object.values(statusCounts).reduce((a, b) => a + b, 0),
-        articlesByStatus: statusCounts,
-        totalGames: totalGames || 0,
-        queueByStatus: queueCounts,
+        totalArticles,
+        articlesByStatus,
+        totalGames,
+        queueByStatus,
+        todayPublished,
+        weekGenerated,
       },
-      recentArticles: flattenedArticles,
+      topGames: topGamesResult.rows,
+      recentArticles: recentResult.rows,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

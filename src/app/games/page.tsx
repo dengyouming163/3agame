@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import { Gamepad2, ArrowLeft } from 'lucide-react';
+import { Gamepad2, BookOpen } from 'lucide-react';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Games',
-  description: 'Browse all AAA games covered by GameVault Pro. Find guides for Elden Ring, Baldur\'s Gate 3, and more.',
+  title: 'Game Zones - Browse AAA Games',
+  description: 'Browse all AAA game zones. Find guides for Elden Ring, Baldur\'s Gate 3, Final Fantasy, God of War, and more top-tier titles.',
+  keywords: ['AAA games', 'game guides by title', 'Elden Ring guides', 'Baldur\'s Gate 3 guides', 'FF16 guides'],
 };
 
 interface Game {
@@ -13,7 +14,8 @@ interface Game {
   slug: string;
   genre: string | null;
   platform: string | null;
-  article_count: string;
+  description: string | null;
+  article_count: number;
 }
 
 async function getGames(): Promise<Game[]> {
@@ -29,73 +31,81 @@ async function getGames(): Promise<Game[]> {
   }
 }
 
+function getGenreColor(genre: string | null): string {
+  if (!genre) return 'text-muted-foreground';
+  const g = genre.toLowerCase();
+  if (g.includes('rpg')) return 'text-purple-400';
+  if (g.includes('action')) return 'text-red-400';
+  if (g.includes('adventure')) return 'text-cyan-400';
+  if (g.includes('horror')) return 'text-amber-400';
+  if (g.includes('survival')) return 'text-green-400';
+  return 'text-muted-foreground';
+}
+
 export default async function GamesPage() {
   const games = await getGames();
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center gap-2">
-              <Gamepad2 className="h-8 w-8 text-primary" />
-              <span className="text-xl font-bold gradient-text">GameVault Pro</span>
-            </Link>
-            <div className="hidden md:flex items-center gap-8">
-              <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Home</Link>
-              <Link href="/guides" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Guides</Link>
-              <Link href="/games" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Games</Link>
-              <Link href="/admin" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Dashboard</Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <section className="border-b border-border bg-card/50">
+    <div className="min-h-screen">
+      {/* Header */}
+      <section className="hero-pattern border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors mb-4">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Home
-          </Link>
-          <h1 className="text-4xl font-bold text-foreground">All Games</h1>
-          <p className="text-muted-foreground mt-2">{games.length} AAA titles covered</p>
+          <h1 className="text-3xl sm:text-4xl font-black font-display gradient-text-cyan mb-3" style={{ background: 'linear-gradient(90deg, #22d3ee, #a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            GAME ZONES
+          </h1>
+          <p className="text-muted-foreground text-lg">
+            Pick your game. We&apos;ve got the guides to help you dominate.
+          </p>
         </div>
       </section>
 
+      {/* Games Grid */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {games.map((game) => (
-            <Link
-              key={game.id}
-              href={`/games/${game.slug}`}
-              className="group rounded-xl border border-border bg-card p-6 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300"
-            >
-              <div className="flex items-start gap-4">
-                <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                  <Gamepad2 className="h-7 w-7 text-primary" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-lg font-semibold text-card-foreground group-hover:text-primary transition-colors line-clamp-2">
-                    {game.name}
-                  </h2>
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    {game.genre && (
-                      <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                        {game.genre}
+        {games.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {games.map((game) => (
+              <Link key={game.id} href={`/games/${game.slug}`} className="block group">
+                <div className="game-card p-6 h-full flex flex-col">
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="text-lg font-bold text-foreground group-hover:text-cyan-400 transition-colors font-display leading-tight">
+                      {game.name}
+                    </h3>
+                    {game.article_count > 0 && (
+                      <span className="flex items-center gap-1 text-xs font-semibold text-purple-400 bg-purple-500/10 border border-purple-500/20 rounded-md px-2 py-0.5 shrink-0 ml-2">
+                        <BookOpen className="h-3 w-3" />
+                        {game.article_count}
                       </span>
                     )}
-                    <span className="text-xs text-muted-foreground">
-                      {parseInt(game.article_count, 10)} guide{parseInt(game.article_count, 10) !== 1 ? 's' : ''}
-                    </span>
                   </div>
+
+                  {game.genre && (
+                    <p className={`text-xs font-semibold uppercase tracking-wider mb-2 ${getGenreColor(game.genre)}`}>
+                      {game.genre}
+                    </p>
+                  )}
+
                   {game.platform && (
-                    <p className="text-xs text-muted-foreground mt-2">{game.platform}</p>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      {game.platform}
+                    </p>
+                  )}
+
+                  {game.description && (
+                    <p className="text-sm text-muted-foreground flex-1 leading-relaxed line-clamp-2">
+                      {game.description}
+                    </p>
                   )}
                 </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-16 text-muted-foreground">
+            <Gamepad2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p className="text-lg font-semibold mb-1">No games yet</p>
+            <p className="text-sm">Games will appear here as guides are published.</p>
+          </div>
+        )}
       </section>
     </div>
   );

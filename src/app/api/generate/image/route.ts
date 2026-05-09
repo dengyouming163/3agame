@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ImageGenerationClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
 import { getStorage } from '@/lib/storage';
-import { getClient } from '@/lib/db';
+import { query } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,9 +18,9 @@ export async function POST(request: NextRequest) {
     const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
     const config = new Config();
 
-    // Generate image
+    // Generate image with hardcore gaming aesthetic
     const imageClient = new ImageGenerationClient(config, customHeaders);
-    const imagePrompt = `Epic video game artwork, high quality digital painting style: ${prompt}. Cinematic lighting, detailed, professional game art, 16:9 aspect ratio`;
+    const imagePrompt = `Dark epic video game artwork, cinematic digital painting, dramatic lighting with neon accents: ${prompt}. Professional game concept art style, ultra detailed, 16:9 aspect ratio, dark atmosphere with vibrant highlights`;
 
     const response = await imageClient.generate({
       prompt: imagePrompt,
@@ -39,9 +39,8 @@ export async function POST(request: NextRequest) {
 
     const imageUrl = helper.imageUrls[0];
 
-    // Upload to our object storage for persistence
+    // Upload to object storage for persistence
     const storage = getStorage();
-
     const imageKey = await storage.uploadFromUrl({
       url: imageUrl,
       timeout: 60000,
@@ -49,14 +48,10 @@ export async function POST(request: NextRequest) {
 
     // Update article with cover image if articleId provided
     if (articleId) {
-      const client = getClient();
-      const { error: updateError } = await client
-        .from('articles')
-        .update({ cover_image_key: imageKey })
-        .eq('id', articleId);
-      if (updateError) {
-        console.error('Failed to update article cover image:', updateError.message);
-      }
+      await query(
+        `UPDATE articles SET cover_image_key = $1, updated_at = NOW() WHERE id = $2`,
+        [imageKey, articleId]
+      );
     }
 
     // Generate a signed URL for immediate display

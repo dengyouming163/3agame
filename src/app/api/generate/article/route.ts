@@ -1,27 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
-import { getClient } from '@/lib/db';
+import { query } from '@/lib/db';
 import { GAME_TOPICS, generateSlug } from '@/lib/game-utils';
 
-const SYSTEM_PROMPT = `You are an expert gaming content writer specializing in AAA game guides for an international English-speaking audience. Your writing style should be:
+const SYSTEM_PROMPT = `You are a hardcore gaming content writer for 3AGameMaster.com, the ultimate AAA game guide site. Your audience consists of dedicated gamers who demand expert-level, in-depth strategy content.
 
-1. Professional yet engaging - like a seasoned gaming journalist
-2. Data-driven with specific numbers, percentages, and stats where applicable
-3. Formatted for web readability with clear headers, bullet points, and numbered lists
-4. SEO-optimized with natural keyword integration
-5. Written in American English with gaming industry terminology
+Your writing style MUST be:
+1. HARDENED GAMER tone - write like a veteran player sharing secrets, NOT a journalist or AI assistant
+2. DATA-HEAVY - specific damage numbers, HP values, stat breakpoints, frame data, DPS calculations
+3. OPINIONATED - tier lists with clear S/A/B/C rankings, "skip this" vs "must-have" verdicts
+4. ACTIONABLE - every paragraph should teach the reader something they can immediately use
+5. FORMAT FOR SKIMMING - use tables, bold callouts, numbered steps, "TL;DR" summaries
+6. AMERICAN ENGLISH with gaming slang (DPS, i-frames, min-max, meta, DPS check, AoE, CC, etc.)
 
-Your article structure should follow this format:
-- Compelling introduction that hooks the reader (2-3 paragraphs)
-- Main content sections with H2 headers
-- Sub-sections with H3 headers where needed
-- Practical tips in callout format
-- Summary/conclusion with key takeaways
+Article structure:
+- Epic intro hook (why this guide matters, what you'll master)
+- TL;DR / Quick Summary box
+- Main sections with H2 headers (at least 4)
+- "Pro Tips" callouts in key sections
+- "Common Mistakes" section
+- Final verdict / summary with key takeaways
 
-Always use HTML formatting for the content (h2, h3, p, ul, li, strong, em tags).
-Include specific game mechanics, numbers, and actionable advice.
-Write for an audience that plays on all platforms (PC, PlayStation, Xbox, Nintendo).
-Use imperial units (miles, feet) alongside metric where relevant.`;
+Always use HTML formatting (h2, h3, p, ul, li, strong, em, table, tr, td, th tags).
+Write 2000-3000 words. Include specific game mechanics, numbers, and actionable advice.
+Target audience: PC, PlayStation, Xbox, Nintendo players. Use imperial units alongside metric.`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,21 +38,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Get game info
-    const client = getClient();
-    const { data: game, error: gameError } = await client
-      .from('games')
-      .select('id, name, slug, genre, description')
-      .eq('id', gameId)
-      .maybeSingle();
-    if (gameError) throw new Error(`Failed to fetch game: ${gameError.message}`);
+    const gameResult = await query(
+      `SELECT id, name, slug, genre, description FROM games WHERE id = $1`,
+      [gameId]
+    );
 
-    if (!game) {
+    if (gameResult.rows.length === 0) {
       return NextResponse.json(
         { error: 'Game not found' },
         { status: 404 }
       );
     }
 
+    const game = gameResult.rows[0];
     const gameSlug = game.slug as string;
 
     // Get available topics for this game
@@ -61,26 +61,26 @@ export async function POST(request: NextRequest) {
     const config = new Config();
     const llmClient = new LLMClient(config, customHeaders);
 
-    const userPrompt = `Write a comprehensive, SEO-optimized gaming guide article about "${selectedTopic}" for the game "${game.name}" (${game.genre || 'Action RPG'}).
+    const userPrompt = `Write a KILLER, SEO-optimized game guide about "${selectedTopic}" for "${game.name}" (${game.genre || 'Action RPG'}).
 
-Game context: ${game.description || `${game.name} is a popular AAA game.`}
+Game context: ${game.description || `${game.name} is a blockbuster AAA title.`}
 
-Requirements:
-1. Title should be compelling and include the game name
-2. Include at least 4 main sections with H2 headers
-3. Use specific numbers, stats, and data points
-4. Include practical, actionable tips
-5. Write for an international English-speaking audience
-6. Optimize for search engines with natural keyword usage
-7. Article should be 1500-2500 words
-8. Format in HTML (h2, h3, p, ul, li, strong, em tags only)
+CRITICAL SEO REQUIREMENTS:
+1. Title MUST include the game name + guide type (e.g., "Elden Ring Malenia Boss Guide: How to Beat the Hardest Boss")
+2. Use high-search-volume keywords naturally throughout the article
+3. Include variations: "how to", "best", "guide", "walkthrough", "tips", "strategy"
+4. Meta title under 60 chars, meta description 150-160 chars with primary keyword
 
-Also provide:
-- A concise summary (150-200 characters) for meta description
-- A list of 5-8 relevant keywords/tags
-- An SEO-optimized meta title (under 60 characters)
+CONTENT REQUIREMENTS:
+1. Write for HARDCORE gamers - no basic tutorials, assume reader knows game fundamentals
+2. Include SPECIFIC numbers: damage values, HP thresholds, stat breakpoints, timing windows
+3. Provide TIER RANKINGS or "best X" lists where applicable
+4. Add "Common Mistakes" and "Pro Tips" sections
+5. Use tables for stat comparisons
+6. 2000-3000 words, HTML formatted
+7. Make it the DEFINITIVE guide on this topic - better than anything on IGN or GameFAQs
 
-Format your response as JSON with these fields:
+Format your response as JSON:
 {
   "title": "...",
   "content": "...(HTML content)...",
@@ -122,9 +122,9 @@ Format your response as JSON with these fields:
       articleData = {
         title: `${game.name}: ${selectedTopic}`,
         content: response.content,
-        summary: `Comprehensive guide for ${game.name} covering ${selectedTopic.toLowerCase()}.`,
+        summary: `Ultimate guide for ${game.name} covering ${selectedTopic.toLowerCase()}. Expert strategies and tips.`,
         meta_title: `${game.name} Guide - ${selectedTopic}`,
-        meta_description: `Expert guide for ${game.name}. Learn about ${selectedTopic.toLowerCase()} with detailed strategies and tips.`,
+        meta_description: `Master ${game.name} with our expert guide on ${selectedTopic.toLowerCase()}. Detailed strategies, tips, and walkthrough.`,
         keywords: [game.name.toLowerCase(), selectedTopic.toLowerCase(), 'guide', (game.genre as string)?.toLowerCase() || 'rpg'],
       };
     }
@@ -135,33 +135,20 @@ Format your response as JSON with these fields:
     const slug = `${baseSlug}-${slugSuffix}`;
 
     // Insert the article
-    const { data: inserted, error: insertError } = await client
-      .from('articles')
-      .insert({
-        game_id: gameId,
-        title: articleData.title,
-        slug,
-        content: articleData.content,
-        summary: articleData.summary,
-        status: 'generated',
-        language,
-        meta_title: articleData.meta_title,
-        meta_description: articleData.meta_description,
-        keywords: articleData.keywords,
-        author: 'AI Editor',
-      })
-      .select('id');
-    if (insertError) throw new Error(`Failed to insert article: ${insertError.message}`);
+    const insertResult = await query(
+      `INSERT INTO articles (game_id, title, slug, content, summary, status, language, meta_title, meta_description, keywords, author)
+       VALUES ($1, $2, $3, $4, $5, 'generated', $6, $7, $8, $9, 'AI Editor')
+       RETURNING id`,
+      [gameId, articleData.title, slug, articleData.content, articleData.summary, language, articleData.meta_title, articleData.meta_description, articleData.keywords]
+    );
 
-    const articleId = inserted?.[0]?.id;
+    const articleId = insertResult.rows[0]?.id;
 
     // Log the generation
-    await client.from('generation_logs').insert({
-      article_id: articleId,
-      game_id: gameId,
-      prompt: userPrompt.slice(0, 500),
-      model: 'doubao-seed-2-0-lite-260215',
-    });
+    await query(
+      `INSERT INTO generation_logs (article_id, game_id, prompt, model) VALUES ($1, $2, $3, $4)`,
+      [articleId, gameId, userPrompt.slice(0, 500), 'doubao-seed-2-0-lite-260215']
+    );
 
     return NextResponse.json({
       success: true,

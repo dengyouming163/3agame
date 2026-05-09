@@ -1,37 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getClient } from '@/lib/db';
+import { query } from '@/lib/db';
 
 export async function GET() {
   try {
-    const client = getClient();
+    // Get all games with article counts
+    const result = await query(
+      `SELECT g.id, g.name, g.slug, g.genre, g.platform, g.release_date, g.description, g.cover_image_key, g.created_at, g.updated_at,
+        COUNT(a.id)::int as article_count
+       FROM games g
+       LEFT JOIN articles a ON g.id = a.game_id
+       GROUP BY g.id
+       ORDER BY g.name`
+    );
 
-    // Get all games
-    const { data: games, error: gamesError } = await client
-      .from('games')
-      .select('id, name, slug, genre, platform, release_date, description, cover_image_key, created_at, updated_at')
-      .order('name');
-    if (gamesError) throw new Error(`Failed to fetch games: ${gamesError.message}`);
-
-    // Get article counts per game
-    const { data: articleCounts, error: countError } = await client
-      .from('articles')
-      .select('game_id')
-      .not('game_id', 'is', null);
-    if (countError) throw new Error(`Failed to fetch article counts: ${countError.message}`);
-
-    // Count articles per game
-    const countMap: Record<string, number> = {};
-    for (const row of (articleCounts || [])) {
-      const gid = String(row.game_id);
-      countMap[gid] = (countMap[gid] || 0) + 1;
-    }
-
-    const result = (games || []).map((g: { id: number; name: string; slug: string; genre: string | null; platform: string | null; release_date: string | null; description: string | null; cover_image_key: string | null }) => ({
-      ...g,
-      article_count: String(countMap[String(g.id)] || 0),
-    }));
-
-    return NextResponse.json({ games: result });
+    return NextResponse.json({ games: result.rows });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Get games error:', message);
@@ -54,16 +36,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const client = getClient();
-    const { data, error } = await client
-      .from('games')
-      .insert({ name, slug, genre, platform, release_date, description })
-      .select('id');
-    if (error) throw new Error(`Failed to create game: ${error.message}`);
+    const result = await query(
+      `INSERT INTO games (name, slug, genre, platform, release_date, description)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id`,
+      [name, slug, genre, platform, release_date, description]
+    );
 
     return NextResponse.json({
       success: true,
-      game: { id: data?.[0]?.id },
+      game: { id: result.rows[0]?.id },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

@@ -1,27 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getClient } from '@/lib/db';
+import { query } from '@/lib/db';
 
 export async function GET() {
   try {
-    const client = getClient();
+    const result = await query(
+      `SELECT pq.id, pq.article_id, pq.scheduled_at, pq.status, pq.attempts, pq.last_attempt_at, pq.created_at,
+        a.title as article_title
+       FROM publish_queue pq
+       LEFT JOIN articles a ON pq.article_id = a.id
+       ORDER BY pq.scheduled_at ASC`
+    );
 
-    // Get queue items with article titles via join
-    const { data, error } = await client
-      .from('publish_queue')
-      .select('id, article_id, scheduled_at, status, attempts, last_attempt_at, created_at, articles(title)')
-      .order('scheduled_at', { ascending: true });
-    if (error) throw new Error(`Failed to fetch schedule: ${error.message}`);
-
-    const queue = (data || []).map((row: Record<string, unknown>) => {
-      const articleData = row.articles as { title: string } | null;
-      const { articles: _articles, ...rest } = row;
-      return {
-        ...rest,
-        article_title: articleData?.title || 'Unknown',
-      };
-    });
-
-    return NextResponse.json({ queue });
+    return NextResponse.json({ queue: result.rows });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Get schedule error:', message);
@@ -44,23 +34,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const client = getClient();
+    // Check if article exists and is not already published
+    const articleResult = await query(
+      `SELECT id, status, title FROM articles WHERE id = $1`,
+      [articleId]
+    );
 
-    // Check if article exists and is in a valid state
-    const { data: article, error: articleError } = await client
-      .from('articles')
-      .select('id, status, title')
-      .eq('id', articleId)
-      .maybeSingle();
-    if (articleError) throw new Error(`Failed to fetch article: ${articleError.message}`);
-
-    if (!article) {
+    if (articleResult.rows.length === 0) {
       return NextResponse.json(
         { error: 'Article not found' },
         { status: 404 }
       );
     }
 
+    const article = articleResult.rows[0];
     if (article.status === 'published') {
       return NextResponse.json(
         { error: 'Article is already published' },
@@ -69,22 +56,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Update article status and scheduled time
-    const { error: updateError } = await client
-      .from('articles')
-      .update({ status: 'reviewed', scheduled_at: scheduledAt })
-      .eq('id', articleId);
-    if (updateError) throw new Error(`Failed to update article: ${updateError.message}`);
+    await query(
+      `UPDATE articles SET status = 'reviewed', scheduled_at = $1, updated_at = NOW() WHERE id = $2`,
+      [scheduledAt, articleId]
+    );
 
     // Add to publish queue
-    const { data: queueData, error: queueError } = await client
-      .from('publish_queue')
-      .insert({ article_id: articleId, scheduled_at: scheduledAt, status: 'pending' })
-      .select('id');
-    if (queueError) throw new Error(`Failed to create queue item: ${queueError.message}`);
+    const queueResult = await query(
+      `INSERT INTO publish_queue (article_id, scheduled_at, status) VALUES ($1, $2, 'pending') RETURNING id`,
+      [articleId, scheduledAt]
+    );
 
     return NextResponse.json({
       success: true,
-      queueItem: { id: queueData?.[0]?.id },
+      queueItem: { id: queueResult.rows[0]?.id },
       message: `Article "${article.title}" scheduled for ${new Date(scheduledAt).toLocaleString()}`,
     });
   } catch (error) {
