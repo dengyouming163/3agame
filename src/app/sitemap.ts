@@ -1,9 +1,8 @@
 import type { MetadataRoute } from 'next';
+import { getBaseUrl } from '@/lib/utils';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT || 'localhost:5000';
-  const protocol = domain.startsWith('localhost') ? 'http' : 'https';
-  const baseUrl = `${protocol}://${domain}`;
+  const baseUrl = getBaseUrl();
 
   const staticPages: MetadataRoute.Sitemap = [
     {

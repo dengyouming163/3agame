@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Gamepad2, BookOpen } from 'lucide-react';
+import { getBaseUrl } from '@/lib/utils';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -20,9 +21,8 @@ interface Game {
 
 async function getGames(): Promise<Game[]> {
   try {
-    const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT || 'http://localhost:5000';
-    const protocol = domain.startsWith('http') ? '' : 'https://';
-    const res = await fetch(`${protocol}${domain}/api/games`, { cache: 'no-store' });
+    const baseUrl = getBaseUrl();
+    const res = await fetch(`${baseUrl}/api/games`, { cache: 'no-store' });
     if (!res.ok) return [];
     const data = await res.json();
     return data.games || [];

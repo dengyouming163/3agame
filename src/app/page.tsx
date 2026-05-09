@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Swords, Shield, MapIcon, Gamepad2, Lightbulb, ChevronRight, Flame, Clock, TrendingUp } from 'lucide-react';
 import { formatDate } from '@/lib/game-utils';
+import { getBaseUrl } from '@/lib/utils';
 
 interface Article {
   id: number;
@@ -28,9 +29,8 @@ interface Game {
 
 async function getPublishedArticles(): Promise<Article[]> {
   try {
-    const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT || 'http://localhost:5000';
-    const protocol = domain.startsWith('http') ? '' : 'https://';
-    const res = await fetch(`${protocol}${domain}/api/articles?status=published&limit=12`, { cache: 'no-store' });
+    const baseUrl = getBaseUrl();
+    const res = await fetch(`${baseUrl}/api/articles?status=published&limit=12`, { cache: 'no-store' });
     if (!res.ok) return [];
     const data = await res.json();
     return data.articles || [];
@@ -41,9 +41,8 @@ async function getPublishedArticles(): Promise<Article[]> {
 
 async function getGames(): Promise<Game[]> {
   try {
-    const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT || 'http://localhost:5000';
-    const protocol = domain.startsWith('http') ? '' : 'https://';
-    const res = await fetch(`${protocol}${domain}/api/games`, { cache: 'no-store' });
+    const baseUrl = getBaseUrl();
+    const res = await fetch(`${baseUrl}/api/games`, { cache: 'no-store' });
     if (!res.ok) return [];
     const data = await res.json();
     return (data.games || []).filter((g: Game) => g.article_count > 0);

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowLeft, BookOpen, Clock, Swords } from 'lucide-react';
 import { formatDate } from '@/lib/game-utils';
+import { getBaseUrl } from '@/lib/utils';
 import type { Metadata } from 'next';
 
 interface PageProps {
@@ -10,9 +11,8 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   try {
-    const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT || 'http://localhost:5000';
-    const protocol = domain.startsWith('http') ? '' : 'https://';
-    const res = await fetch(`${protocol}${domain}/api/games`, { cache: 'no-store' });
+    const baseUrl = getBaseUrl();
+    const res = await fetch(`${baseUrl}/api/games`, { cache: 'no-store' });
     if (!res.ok) return { title: 'Game Not Found' };
     const data = await res.json();
     const game = data.games?.find((g: { slug: string }) => g.slug === slug);
@@ -51,12 +51,11 @@ interface Article {
 
 async function getGameData(slug: string): Promise<{ game: Game | null; articles: Article[] }> {
   try {
-    const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT || 'http://localhost:5000';
-    const protocol = domain.startsWith('http') ? '' : 'https://';
+    const baseUrl = getBaseUrl();
 
     const [gamesRes, articlesRes] = await Promise.all([
-      fetch(`${protocol}${domain}/api/games`, { cache: 'no-store' }),
-      fetch(`${protocol}${domain}/api/articles?status=published&limit=50`, { cache: 'no-store' }),
+      fetch(`${baseUrl}/api/games`, { cache: 'no-store' }),
+      fetch(`${baseUrl}/api/articles?status=published&limit=50`, { cache: 'no-store' }),
     ]);
 
     if (!gamesRes.ok || !articlesRes.ok) return { game: null, articles: [] };

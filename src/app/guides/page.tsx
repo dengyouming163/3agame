@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Swords, Shield, MapIcon, Gamepad2, Lightbulb, Clock, Filter } from 'lucide-react';
 import { formatDate } from '@/lib/game-utils';
+import { getBaseUrl } from '@/lib/utils';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -26,10 +27,9 @@ interface Article {
 
 async function getArticles(type?: string): Promise<Article[]> {
   try {
-    const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT || 'http://localhost:5000';
-    const protocol = domain.startsWith('http') ? '' : 'https://';
+    const baseUrl = getBaseUrl();
     const typeParam = type ? `&type=${type}` : '';
-    const res = await fetch(`${protocol}${domain}/api/articles?status=published&limit=50${typeParam}`, { cache: 'no-store' });
+    const res = await fetch(`${baseUrl}/api/articles?status=published&limit=50${typeParam}`, { cache: 'no-store' });
     if (!res.ok) return [];
     const data = await res.json();
     return data.articles || [];

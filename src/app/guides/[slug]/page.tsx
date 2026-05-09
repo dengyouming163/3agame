@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Swords, ArrowLeft, Clock, Share2, Tag, BookOpen } from 'lucide-react';
 import { formatDate, stripHtml } from '@/lib/game-utils';
+import { getBaseUrl } from '@/lib/utils';
 import type { Metadata } from 'next';
 
 interface PageProps {
@@ -10,9 +11,8 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   try {
-    const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT || 'http://localhost:5000';
-    const protocol = domain.startsWith('http') ? '' : 'https://';
-    const res = await fetch(`${protocol}${domain}/api/articles?status=published&limit=100`, { cache: 'no-store' });
+    const baseUrl = getBaseUrl();
+    const res = await fetch(`${baseUrl}/api/articles?status=published&limit=100`, { cache: 'no-store' });
     if (!res.ok) return { title: 'Guide Not Found' };
     const data = await res.json();
     const article = data.articles?.find((a: { slug: string }) => a.slug === slug);
@@ -56,15 +56,14 @@ interface ArticleDetail {
 
 async function getArticle(slug: string): Promise<ArticleDetail | null> {
   try {
-    const domain = process.env.COZE_PROJECT_DOMAIN_DEFAULT || 'http://localhost:5000';
-    const protocol = domain.startsWith('http') ? '' : 'https://';
-    const listRes = await fetch(`${protocol}${domain}/api/articles?status=published&limit=100`, { cache: 'no-store' });
+    const baseUrl = getBaseUrl();
+    const listRes = await fetch(`${baseUrl}/api/articles?status=published&limit=100`, { cache: 'no-store' });
     if (!listRes.ok) return null;
     const listData = await listRes.json();
     const articleStub = listData.articles?.find((a: { slug: string }) => a.slug === slug);
     if (!articleStub) return null;
 
-    const detailRes = await fetch(`${protocol}${domain}/api/articles/${articleStub.id}`, { cache: 'no-store' });
+    const detailRes = await fetch(`${baseUrl}/api/articles/${articleStub.id}`, { cache: 'no-store' });
     if (!detailRes.ok) return null;
     const detailData = await detailRes.json();
     return detailData.article;
