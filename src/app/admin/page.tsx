@@ -200,7 +200,7 @@ export default function AdminPage() {
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
       params.set('limit', '50');
-      const res = await fetch(`/api/articles?${params}`);
+      const res = await fetch(`/api/articles?includeContent=true&${params}`);
       if (res.ok) {
         const data = await res.json();
         setArticles(data.articles || []);

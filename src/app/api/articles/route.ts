@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const gameId = searchParams.get('gameId');
     const type = searchParams.get('type');
+    const includeContent = searchParams.get('includeContent') === 'true';
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10), 100);
     const offset = (page - 1) * limit;
@@ -53,9 +54,10 @@ export async function GET(request: NextRequest) {
     );
     const total = parseInt(countResult.rows[0]?.total || '0', 10);
 
-    // Data query with game join
+    // Data query with game join — exclude content by default (too large), include only when requested
+    const contentField = includeContent ? 'a.content,' : '';
     const dataResult = await query(
-      `SELECT a.id, a.game_id, a.title, a.slug, a.content, a.summary, a.cover_image_key,
+      `SELECT a.id, a.game_id, a.title, a.slug, a.summary, ${contentField} a.cover_image_key,
         a.status, a.language, a.meta_title, a.meta_description, a.keywords, a.author,
         a.published_at, a.scheduled_at, a.created_at, a.updated_at,
         g.name as game_name, g.slug as game_slug

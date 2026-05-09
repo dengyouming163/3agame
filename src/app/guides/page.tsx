@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Swords, Shield, MapIcon, Gamepad2, Lightbulb, Clock, Filter } from 'lucide-react';
-import { formatDate, stripHtml, truncateText } from '@/lib/game-utils';
+import { formatDate } from '@/lib/game-utils';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -14,7 +14,6 @@ interface Article {
   title: string;
   slug: string;
   summary: string | null;
-  content: string;
   status: string;
   keywords: string[] | null;
   author: string;
@@ -148,7 +147,7 @@ export default async function GuidesPage({
                         {article.title}
                       </h3>
                       <p className="text-sm text-muted-foreground mb-4 flex-1 leading-relaxed">
-                        {article.summary || truncateText(stripHtml(article.content), 150)}
+                        {article.summary || 'Expert guide with detailed strategies and pro tips.'}
                       </p>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
