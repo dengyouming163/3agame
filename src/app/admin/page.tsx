@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Swords, Shield, Map, Gamepad2, Lightbulb, BarChart3, FileText, Zap, Calendar, Trash2, Eye, CheckCircle, RefreshCw, Clock, TrendingUp, BookOpen, AlertCircle, ChevronDown, ChevronRight, Loader2, ImagePlus } from 'lucide-react';
+import { Swords, Shield, Map, Gamepad2, Lightbulb, BarChart3, FileText, Zap, Calendar, Trash2, Eye, CheckCircle, RefreshCw, Clock, TrendingUp, BookOpen, AlertCircle, ChevronDown, ChevronRight, Loader2, ImagePlus, Flame, Sparkles, ListChecks } from 'lucide-react';
 
 // ===== TYPES =====
 interface Article {
@@ -53,6 +53,34 @@ interface TopGame {
   article_count: number;
 }
 
+interface TopicItem {
+  topic: string;
+  used: boolean;
+}
+
+interface TrendingTopic {
+  gameSlug: string;
+  gameName: string;
+  topic: string;
+  guideType: string;
+  priority: number;
+  keywords: string[];
+}
+
+interface GuideTypeOption {
+  type: string;
+  label: string;
+  icon: string;
+  description: string;
+}
+
+interface PlannedArticle {
+  gameSlug: string;
+  gameId: number;
+  topic: string;
+  guideType: string;
+}
+
 // ===== TAB CONFIG =====
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
@@ -84,6 +112,17 @@ function getQueueStatusBadge(status: string) {
   return map[status] || 'status-draft';
 }
 
+function getGuideTypeIcon(type: string) {
+  const map: Record<string, string> = {
+    boss: '⚔️',
+    build: '🛡️',
+    collectible: '🗺️',
+    walkthrough: '📖',
+    tips: '💡',
+  };
+  return map[type] || '📝';
+}
+
 // ===== MAIN COMPONENT =====
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
@@ -99,6 +138,18 @@ export default function AdminPage() {
   const [expandedArticle, setExpandedArticle] = useState<number | null>(null);
   const [scheduleDate, setScheduleDate] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
+
+  // AI Generate tab state
+  const [guideType, setGuideType] = useState<string>('');
+  const [customTopic, setCustomTopic] = useState<string>('');
+  const [topics, setTopics] = useState<TopicItem[]>([]);
+  const [trending, setTrending] = useState<TrendingTopic[]>([]);
+  const [guideTypes, setGuideTypes] = useState<GuideTypeOption[]>([]);
+  const [selectedTopic, setSelectedTopic] = useState<string>('');
+  const [batchPlan, setBatchPlan] = useState<PlannedArticle[]>([]);
+  const [batchGenerating, setBatchGenerating] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  const [showBatchPlan, setShowBatchPlan] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -146,6 +197,21 @@ export default function AdminPage() {
     } catch (e) { console.error(e); }
   }, []);
 
+  const fetchTopics = useCallback(async (gameSlug: string) => {
+    try {
+      const params = new URLSearchParams();
+      params.set('gameSlug', gameSlug);
+      if (guideType) params.set('guideType', guideType);
+      const res = await fetch(`/api/generate/topics?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setTopics(data.topics || []);
+        setTrending(data.trending || []);
+        setGuideTypes(data.guideTypes || []);
+      }
+    } catch (e) { console.error(e); }
+  }, [guideType]);
+
   useEffect(() => {
     fetchDashboard();
     fetchGames();
@@ -155,7 +221,11 @@ export default function AdminPage() {
     if (activeTab === 'articles') fetchArticles();
     if (activeTab === 'schedule') fetchQueue();
     if (activeTab === 'dashboard') fetchDashboard();
-  }, [activeTab, fetchArticles, fetchQueue, fetchDashboard]);
+    if (activeTab === 'generate' && selectedGame) {
+      const game = games.find(g => g.id.toString() === selectedGame);
+      if (game) fetchTopics(game.slug);
+    }
+  }, [activeTab, fetchArticles, fetchQueue, fetchDashboard, fetchTopics, selectedGame, games]);
 
   // ===== ACTIONS =====
   const handleReview = async (articleId: number) => {
@@ -186,15 +256,22 @@ export default function AdminPage() {
     if (!selectedGame) return alert('Select a game first');
     setGenerating(true);
     try {
+      const body: Record<string, unknown> = { gameId: parseInt(selectedGame) };
+      if (guideType) body.guideType = guideType;
+      if (customTopic || selectedTopic) body.topic = customTopic || selectedTopic;
+
       const res = await fetch('/api/generate/article', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gameId: parseInt(selectedGame) }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.success) {
-        alert(`Generated: "${data.article.title}"`);
+        alert(`Generated: "${data.article.title}" (${data.article.guideType || 'guide'})`);
         fetchArticles();
+        // Refresh topics to mark used
+        const game = games.find(g => g.id.toString() === selectedGame);
+        if (game) fetchTopics(game.slug);
       } else {
         alert(`Error: ${data.error}`);
       }
@@ -252,6 +329,65 @@ export default function AdminPage() {
       fetchArticles();
       fetchDashboard();
     }
+  };
+
+  // ===== BATCH GENERATE =====
+  const handlePlanBatch = async () => {
+    const game = games.find(g => g.id.toString() === selectedGame);
+    if (!game) return alert('Select a game first');
+
+    setBatchGenerating(true);
+    try {
+      const res = await fetch('/api/generate/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameSlug: game.slug, count: 5, guideTypes: guideType ? [guideType] : undefined }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBatchPlan(data.plannedArticles);
+        setShowBatchPlan(true);
+      } else {
+        alert(data.message || 'No topics available');
+      }
+    } catch (e) {
+      alert('Batch planning failed');
+      console.error(e);
+    }
+    setBatchGenerating(false);
+  };
+
+  const handleExecuteBatch = async () => {
+    if (batchPlan.length === 0) return;
+    setBatchGenerating(true);
+    setBatchProgress({ current: 0, total: batchPlan.length });
+
+    const results: { topic: string; success: boolean; title?: string }[] = [];
+
+    for (let i = 0; i < batchPlan.length; i++) {
+      const plan = batchPlan[i];
+      setBatchProgress({ current: i + 1, total: batchPlan.length });
+      try {
+        const res = await fetch('/api/generate/article', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gameId: plan.gameId, topic: plan.topic, guideType: plan.guideType }),
+        });
+        const data = await res.json();
+        results.push({ topic: plan.topic, success: data.success, title: data.article?.title });
+      } catch {
+        results.push({ topic: plan.topic, success: false });
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    alert(`Batch complete: ${successCount}/${results.length} articles generated`);
+    setBatchPlan([]);
+    setShowBatchPlan(false);
+    fetchArticles();
+    const game = games.find(g => g.id.toString() === selectedGame);
+    if (game) fetchTopics(game.slug);
+    setBatchGenerating(false);
   };
 
   // ===== RENDER =====
@@ -412,6 +548,12 @@ export default function AdminPage() {
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{new Date(article.created_at).toLocaleDateString()}</span>
                           <span>{article.author}</span>
+                          {article.keywords && article.keywords.length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <ListChecks className="h-3 w-3" />
+                              {article.keywords.slice(0, 3).join(', ')}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -486,24 +628,65 @@ export default function AdminPage() {
 
         {/* AI Generate Tab */}
         {activeTab === 'generate' && (
-          <div>
-            <div className="game-card p-6 max-w-lg">
-              <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">GENERATE NEW GUIDE</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Select Game</label>
-                  <select
-                    value={selectedGame}
-                    onChange={(e) => setSelectedGame(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-purple-500/50"
-                  >
-                    <option value="">-- Choose a game --</option>
-                    {games.map((g) => (
-                      <option key={g.id} value={g.id}>{g.name} ({g.article_count} guides)</option>
-                    ))}
-                  </select>
-                </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left: Generation Controls */}
+            <div className="lg:col-span-1 space-y-4">
+              {/* Game Selection */}
+              <div className="game-card p-5">
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">SELECT GAME</h3>
+                <select
+                  value={selectedGame}
+                  onChange={(e) => { setSelectedGame(e.target.value); setSelectedTopic(''); setCustomTopic(''); }}
+                  className="w-full px-3 py-2.5 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-purple-500/50"
+                >
+                  <option value="">-- Choose a game --</option>
+                  {games.map((g) => (
+                    <option key={g.id} value={g.id}>{g.name} ({g.article_count} guides)</option>
+                  ))}
+                </select>
+              </div>
 
+              {/* Guide Type Selection */}
+              <div className="game-card p-5">
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">GUIDE TYPE</h3>
+                <div className="grid grid-cols-5 gap-1.5">
+                  <button
+                    onClick={() => setGuideType('')}
+                    className={`px-2 py-2 rounded-lg text-xs font-semibold transition-all text-center ${
+                      guideType === '' ? 'bg-purple-500/20 border border-purple-500/30 text-purple-400' : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    ALL
+                  </button>
+                  {guideTypes.map((g) => (
+                    <button
+                      key={g.type}
+                      onClick={() => setGuideType(g.type)}
+                      className={`px-2 py-2 rounded-lg text-xs font-semibold transition-all text-center ${
+                        guideType === g.type ? 'bg-purple-500/20 border border-purple-500/30 text-purple-400' : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+                      }`}
+                      title={g.description}
+                    >
+                      {g.icon} {g.label.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Topic */}
+              <div className="game-card p-5">
+                <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-4">CUSTOM TOPIC</h3>
+                <input
+                  type="text"
+                  value={customTopic}
+                  onChange={(e) => { setCustomTopic(e.target.value); setSelectedTopic(''); }}
+                  placeholder="Enter custom topic or leave blank for auto-select..."
+                  className="w-full px-3 py-2.5 rounded-lg bg-card border border-border text-foreground text-sm focus:outline-none focus:border-purple-500/50 placeholder:text-muted-foreground/50"
+                />
+              </div>
+
+              {/* Generate Buttons */}
+              <div className="space-y-2">
                 <button
                   onClick={handleGenerate}
                   disabled={generating || !selectedGame}
@@ -517,20 +700,165 @@ export default function AdminPage() {
                   ) : (
                     <>
                       <Zap className="h-4 w-4" />
-                      Generate Guide with AI
+                      Generate Single Guide
                     </>
                   )}
                 </button>
 
-                <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                    <p className="text-xs text-amber-300/80">
-                      AI will auto-select a trending topic for the game and generate a full guide with SEO optimization. Generated articles need your review before publishing.
-                    </p>
+                <button
+                  onClick={handlePlanBatch}
+                  disabled={batchGenerating || !selectedGame}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-sm font-bold text-cyan-400 hover:bg-cyan-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {batchGenerating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Planning...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      Batch Generate (5 Articles)
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Batch Plan */}
+              {showBatchPlan && batchPlan.length > 0 && (
+                <div className="game-card p-5">
+                  <h3 className="text-sm font-semibold font-display tracking-wide text-foreground mb-3">BATCH PLAN</h3>
+                  <div className="space-y-2 mb-4">
+                    {batchPlan.map((plan, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span>{getGuideTypeIcon(plan.guideType)}</span>
+                        <span className="text-foreground font-medium truncate">{plan.topic}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleExecuteBatch}
+                      disabled={batchGenerating}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-green-500/20 border border-green-500/30 text-xs font-bold text-green-400 hover:bg-green-500/30 transition-all disabled:opacity-50"
+                    >
+                      {batchGenerating ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          {batchProgress.current}/{batchProgress.total}
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-3 w-3" />
+                          Execute Batch
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => { setShowBatchPlan(false); setBatchPlan([]); }}
+                      className="px-3 py-2 rounded-lg bg-card border border-border text-xs font-semibold text-muted-foreground hover:text-foreground transition-all"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Info Box */}
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-xs text-amber-300/80 space-y-1">
+                    <p>AI auto-selects trending topics with SEO keywords. Select a guide type for specialized formatting.</p>
+                    <p>Generated articles need your review before publishing.</p>
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Right: Topics & Trending */}
+            <div className="lg:col-span-2 space-y-4">
+              {/* Trending Topics */}
+              {trending.length > 0 && (
+                <div className="game-card p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Flame className="h-4 w-4 text-orange-400" />
+                    <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">TRENDING TOPICS</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {trending.map((t, i) => (
+                      <button
+                        key={i}
+                        onClick={() => { setSelectedTopic(t.topic); setCustomTopic(''); }}
+                        className={`w-full text-left flex items-center gap-3 p-3 rounded-lg transition-all ${
+                          selectedTopic === t.topic
+                            ? 'bg-purple-500/20 border border-purple-500/30'
+                            : 'bg-card border border-border hover:border-purple-500/20'
+                        }`}
+                      >
+                        <span className="text-lg shrink-0">{getGuideTypeIcon(t.guideType)}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{t.topic}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-purple-400">{t.gameName}</span>
+                            <span className="text-xs text-muted-foreground">Priority: {'🔥'.repeat(Math.ceil(t.priority / 3))}</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1 max-w-[200px]">
+                          {t.keywords.slice(0, 3).map((kw, j) => (
+                            <span key={j} className="px-1.5 py-0.5 rounded text-[10px] bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                              {kw}
+                            </span>
+                          ))}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Available Topics */}
+              {selectedGame && topics.length > 0 && (
+                <div className="game-card p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <ListChecks className="h-4 w-4 text-green-400" />
+                    <h3 className="text-sm font-semibold font-display tracking-wide text-foreground">AVAILABLE TOPICS</h3>
+                    <span className="ml-auto text-xs text-muted-foreground">{topics.filter(t => !t.used).length} available / {topics.length} total</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[500px] overflow-y-auto">
+                    {topics.map((t, i) => (
+                      <button
+                        key={i}
+                        onClick={() => { if (!t.used) { setSelectedTopic(t.topic); setCustomTopic(''); } }}
+                        disabled={t.used}
+                        className={`text-left flex items-center gap-2 p-2.5 rounded-lg transition-all text-sm ${
+                          t.used
+                            ? 'bg-card/50 border border-border opacity-50 cursor-not-allowed'
+                            : selectedTopic === t.topic
+                              ? 'bg-purple-500/20 border border-purple-500/30 text-foreground'
+                              : 'bg-card border border-border hover:border-purple-500/20 text-foreground'
+                        }`}
+                      >
+                        {t.used ? (
+                          <CheckCircle className="h-3.5 w-3.5 text-green-500/50 shrink-0" />
+                        ) : (
+                          <div className="h-3.5 w-3.5 rounded-full border border-purple-500/30 shrink-0" />
+                        )}
+                        <span className="truncate">{t.topic}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty state */}
+              {!selectedGame && (
+                <div className="text-center py-16 text-muted-foreground">
+                  <Gamepad2 className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                  <p className="font-semibold text-lg">Select a game to see available topics</p>
+                  <p className="text-sm mt-1">Choose from trending topics or let AI auto-select the best one</p>
+                </div>
+              )}
             </div>
           </div>
         )}

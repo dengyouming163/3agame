@@ -30,12 +30,20 @@ export const metadata: Metadata = {
 };
 
 const NAV_LINKS = [
-  { href: '/guides?type=boss', label: 'Boss Guides', iconName: 'swords', icon: Swords, color: 'text-red-400' },
-  { href: '/guides?type=build', label: 'Builds', iconName: 'shield', icon: Shield, color: 'text-cyan-400' },
-  { href: '/guides?type=collectible', label: 'Collectibles', iconName: 'map', icon: Map, color: 'text-amber-400' },
-  { href: '/guides?type=walkthrough', label: 'Walkthroughs', iconName: 'gamepad2', icon: Gamepad2, color: 'text-purple-400' },
-  { href: '/guides?type=tips', label: 'Tips & Tricks', iconName: 'lightbulb', icon: Lightbulb, color: 'text-green-400' },
+  { href: '/guides?type=boss', label: 'Boss Guides', iconName: 'swords', color: 'text-red-400' },
+  { href: '/guides?type=build', label: 'Builds', iconName: 'shield', color: 'text-cyan-400' },
+  { href: '/guides?type=collectible', label: 'Collectibles', iconName: 'map', color: 'text-amber-400' },
+  { href: '/guides?type=walkthrough', label: 'Walkthroughs', iconName: 'gamepad2', color: 'text-purple-400' },
+  { href: '/guides?type=tips', label: 'Tips & Tricks', iconName: 'lightbulb', color: 'text-green-400' },
 ];
+
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  swords: Swords,
+  shield: Shield,
+  map: Map,
+  gamepad2: Gamepad2,
+  lightbulb: Lightbulb,
+};
 
 const MOBILE_NAV_LINKS = NAV_LINKS.map(({ href, label, iconName, color }) => ({ href, label, iconName, color }));
 
@@ -68,17 +76,20 @@ export default function RootLayout({
               </Link>
 
               {/* Desktop Nav */}
-              <nav className="hidden lg:flex items-center gap-1">
-                {NAV_LINKS.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-200"
-                  >
-                    <link.icon className={`h-4 w-4 ${link.color}`} />
-                    {link.label}
-                  </Link>
-                ))}
+	              <nav className="hidden lg:flex items-center gap-1">
+	                {NAV_LINKS.map((link) => {
+	                  const IconComp = ICON_MAP[link.iconName];
+	                  return (
+	                    <Link
+	                      key={link.href}
+	                      href={link.href}
+	                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-200"
+	                    >
+	                      {IconComp && <IconComp className={`h-4 w-4 ${link.color}`} />}
+	                      {link.label}
+	                    </Link>
+	                  );
+	                })}
                 <div className="w-px h-6 bg-border mx-2" />
                 <Link
                   href="/games"
