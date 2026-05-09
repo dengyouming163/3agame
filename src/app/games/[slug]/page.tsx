@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params;
   try {
     const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/api/games`, { cache: 'no-store' });
+    const res = await fetch(`${baseUrl}/api/games`, { next: { revalidate: 3600 } });
     if (!res.ok) return { title: 'Game Not Found' };
     const data = await res.json();
     const game = data.games?.find((g: { slug: string }) => g.slug === slug);
@@ -54,8 +54,8 @@ async function getGameData(slug: string): Promise<{ game: Game | null; articles:
     const baseUrl = getBaseUrl();
 
     const [gamesRes, articlesRes] = await Promise.all([
-      fetch(`${baseUrl}/api/games`, { cache: 'no-store' }),
-      fetch(`${baseUrl}/api/articles?status=published&limit=50`, { cache: 'no-store' }),
+      fetch(`${baseUrl}/api/games`, { next: { revalidate: 3600 } }),
+      fetch(`${baseUrl}/api/articles?status=published&limit=50`, { next: { revalidate: 3600 } }),
     ]);
 
     if (!gamesRes.ok || !articlesRes.ok) return { game: null, articles: [] };

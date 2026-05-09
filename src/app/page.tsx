@@ -30,7 +30,7 @@ interface Game {
 async function getPublishedArticles(): Promise<Article[]> {
   try {
     const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/api/articles?status=published&limit=12`, { cache: 'no-store' });
+    const res = await fetch(`${baseUrl}/api/articles?status=published&limit=12`, { next: { revalidate: 300 } });
     if (!res.ok) return [];
     const data = await res.json();
     return data.articles || [];
@@ -42,7 +42,7 @@ async function getPublishedArticles(): Promise<Article[]> {
 async function getGames(): Promise<Game[]> {
   try {
     const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/api/games`, { cache: 'no-store' });
+    const res = await fetch(`${baseUrl}/api/games`, { next: { revalidate: 300 } });
     if (!res.ok) return [];
     const data = await res.json();
     return (data.games || []).filter((g: Game) => g.article_count > 0);

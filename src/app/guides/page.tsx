@@ -29,7 +29,7 @@ async function getArticles(type?: string): Promise<Article[]> {
   try {
     const baseUrl = getBaseUrl();
     const typeParam = type ? `&type=${type}` : '';
-    const res = await fetch(`${baseUrl}/api/articles?status=published&limit=50${typeParam}`, { cache: 'no-store' });
+    const res = await fetch(`${baseUrl}/api/articles?status=published&limit=50${typeParam}`, { next: { revalidate: 600 } });
     if (!res.ok) return [];
     const data = await res.json();
     return data.articles || [];

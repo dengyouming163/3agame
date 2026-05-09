@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params;
   try {
     const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/api/articles?status=published&limit=100`, { cache: 'no-store' });
+    const res = await fetch(`${baseUrl}/api/articles?status=published&limit=100`, { next: { revalidate: 3600 } });
     if (!res.ok) return { title: 'Guide Not Found' };
     const data = await res.json();
     const article = data.articles?.find((a: { slug: string }) => a.slug === slug);
@@ -58,13 +58,13 @@ interface ArticleDetail {
 async function getArticle(slug: string): Promise<ArticleDetail | null> {
   try {
     const baseUrl = getBaseUrl();
-    const listRes = await fetch(`${baseUrl}/api/articles?status=published&limit=100`, { cache: 'no-store' });
+    const listRes = await fetch(`${baseUrl}/api/articles?status=published&limit=100`, { next: { revalidate: 3600 } });
     if (!listRes.ok) return null;
     const listData = await listRes.json();
     const articleStub = listData.articles?.find((a: { slug: string }) => a.slug === slug);
     if (!articleStub) return null;
 
-    const detailRes = await fetch(`${baseUrl}/api/articles/${articleStub.id}`, { cache: 'no-store' });
+    const detailRes = await fetch(`${baseUrl}/api/articles/${articleStub.id}`, { next: { revalidate: 3600 } });
     if (!detailRes.ok) return null;
     const detailData = await detailRes.json();
     return detailData.article;

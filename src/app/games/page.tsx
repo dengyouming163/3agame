@@ -22,7 +22,7 @@ interface Game {
 async function getGames(): Promise<Game[]> {
   try {
     const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/api/games`, { cache: 'no-store' });
+    const res = await fetch(`${baseUrl}/api/games`, { next: { revalidate: 600 } });
     if (!res.ok) return [];
     const data = await res.json();
     return data.games || [];
