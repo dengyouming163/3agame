@@ -85,6 +85,16 @@ export async function POST(request: NextRequest) {
     );
     const existingTitles = existingResult.rows.map((r: { title: string }) => r.title);
 
+    // Get existing published articles for internal linking context
+    const internalLinksResult = await query(
+      `SELECT title, slug FROM articles WHERE game_id = $1 AND status = 'published' ORDER BY published_at DESC LIMIT 10`,
+      [resolvedGameId]
+    );
+    const internalLinks = internalLinksResult.rows.map((r: { title: string; slug: string }) => ({
+      title: r.title,
+      url: `/guides/${r.slug}`,
+    }));
+
     // Auto-select topic if not provided
     let selectedTopic = topic;
     let selectedGuideType = guideType;
@@ -129,6 +139,9 @@ GAME CONTEXT: ${game.description || `${game.name} is a blockbuster AAA title.`}
 GUIDE TYPE: ${guideTypeLabel}
 ${guideConfig?.promptSuffix || ''}
 
+${internalLinks.length > 0 ? `EXISTING GUIDES ON OUR SITE (link to 2-3 of these naturally in your content using <a href="/guides/SLUG">Title</a>):
+${internalLinks.map(l => `- <a href="${l.url}">${l.title}</a>`).join('\n')}` : ''}
+
 CRITICAL SEO REQUIREMENTS:
 1. Title MUST include: Game Name + Topic + Guide Type (e.g., "Elden Ring Malenia Boss Guide: How to Beat the Hardest Boss in 2025")
 2. Naturally weave these keywords throughout: ${seoKeywords.join(', ')}
@@ -143,9 +156,11 @@ CONTENT REQUIREMENTS:
 4. Add "Common Mistakes" section with real mistakes players make
 5. Add "Pro Tips" callouts in key sections
 6. Use tables for stat comparisons and rankings
-7. 2000-3000 words, HTML formatted
+7. 3000-5000 words, HTML formatted
 8. Make this the DEFINITIVE guide on this topic - better than IGN, GameFAQs, or any wiki
 9. Include 2025 in the title if it's a build or tier list guide
+10. Add a "Frequently Asked Questions" section at the end with 4-6 common questions and concise answers using <h3> for questions and <p> for answers
+11. Include 2-3 internal links to related guides on our site (use <a href="/guides/slug"> format)
 
 Format your response as JSON:
 {

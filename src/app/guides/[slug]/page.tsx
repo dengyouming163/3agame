@@ -23,6 +23,7 @@ interface ArticleDetail {
   keywords: string[] | null;
   author: string;
   published_at: string | null;
+  updated_at: string | null;
   game_id: number | null;
   game_name: string | null;
   game_slug: string | null;
@@ -35,7 +36,7 @@ async function getArticle(slug: string): Promise<ArticleDetail | null> {
     const result = await query(
       `SELECT a.id, a.title, a.slug, a.content, a.summary, a.status, a.language,
         a.meta_title, a.meta_description, a.keywords, a.author,
-        a.published_at, a.cover_image_key, a.game_id,
+        a.published_at, a.updated_at, a.cover_image_key, a.game_id,
         g.name as game_name, g.slug as game_slug
        FROM articles a
        LEFT JOIN games g ON a.game_id = g.id
@@ -91,6 +92,28 @@ function getReadingTime(content: string): string {
   const words = text.split(/\s+/).length;
   const minutes = Math.ceil(words / 250);
   return `${minutes} min read`;
+}
+
+// Extract FAQ Q&A pairs from article HTML content
+function extractFAQ(html: string): Array<{ question: string; answer: string }> {
+  const faqPairs: Array<{ question: string; answer: string }> = [];
+  // Match FAQ sections: <h2>FAQ</h2> or <h2>Frequently Asked Questions</h2> followed by Q&A
+  const faqRegex = /<h[23][^>]*>(?:FAQ|Frequently Asked Questions|Common Questions)<\/h[23]>([\s\S]*?)(?=<h[23]|$)/i;
+  const faqMatch = html.match(faqRegex);
+  if (!faqMatch) return faqPairs;
+  
+  const faqSection = faqMatch[1];
+  // Match Q&A patterns: <h3/h4>Question</h3/h4> followed by <p>Answer</p>
+  const qaRegex = /<h[34][^>]*>([\s\S]*?)<\/h[34]>\s*(?:<p>([\s\S]*?)<\/p>|<ul[^>]*>([\s\S]*?)<\/ul>|<ol[^>]*>([\s\S]*?)<\/ol>)/gi;
+  let match;
+  while ((match = qaRegex.exec(faqSection)) !== null) {
+    const question = match[1].replace(/<[^>]*>/g, '').trim();
+    const answer = (match[2] || match[3] || match[4] || '').replace(/<[^>]*>/g, '').trim();
+    if (question && answer) {
+      faqPairs.push({ question, answer });
+    }
+  }
+  return faqPairs.slice(0, 8); // Max 8 FAQ items for schema
 }
 
 export default async function GuidePage({ params }: PageProps) {
@@ -166,7 +189,7 @@ export default async function GuidePage({ params }: PageProps) {
       },
     },
     datePublished: article.published_at || undefined,
-    dateModified: article.published_at || undefined,
+    dateModified: article.updated_at || article.published_at || undefined,
     mainEntityOfPage: {
       '@type': 'WebPage',
       '@id': `https://3agamemaster.com/guides/${article.slug}`,
@@ -176,6 +199,33 @@ export default async function GuidePage({ params }: PageProps) {
     wordCount: stripHtml(article.content).split(/\s+/).length,
   };
 
+  // BreadcrumbList Schema
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://3agamemaster.com' },
+      { '@type': 'ListItem', position: 2, name: 'Guides', item: 'https://3agamemaster.com/guides' },
+      ...(article.game_name && article.game_slug ? [{ '@type': 'ListItem', position: 3, name: article.game_name, item: `https://3agamemaster.com/games/${article.game_slug}` }] : []),
+      { '@type': 'ListItem', position: article.game_name ? 4 : 3, name: article.title, item: `https://3agamemaster.com/guides/${article.slug}` },
+    ],
+  };
+
+  // FAQ Schema - extract Q&A pairs from content (## FAQ or ## Frequently Asked Questions section)
+  const faqPairs = extractFAQ(article.content);
+  const faqSchema = faqPairs.length > 0 ? {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqPairs.map(pair => ({
+      '@type': 'Question',
+      name: pair.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: pair.answer,
+      },
+    })),
+  } : null;
+
   return (
     <div className="min-h-screen">
       {/* JSON-LD Structured Data */}
@@ -183,6 +233,16 @@ export default async function GuidePage({ params }: PageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      {faqSchema && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+        />
+      )}
 
       {/* Article Header */}
       <header className="hero-pattern border-b border-border">
@@ -218,6 +278,12 @@ export default async function GuidePage({ params }: PageProps) {
               <Clock className="h-4 w-4" />
               {article.published_at ? formatDate(article.published_at) : 'Recently Published'}
             </span>
+            {article.updated_at && article.updated_at !== article.published_at && (
+              <span className="flex items-center gap-1.5 text-cyan-400/70">
+                <Clock className="h-4 w-4" />
+                Updated {formatDate(article.updated_at)}
+              </span>
+            )}
             <span className="flex items-center gap-1.5">
               <BookOpen className="h-4 w-4" />
               {readingTime}
