@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { LLMClient, Config, HeaderUtils, ImageGenerationClient } from 'coze-coding-dev-sdk';
+import { LLMClient, Config, ImageGenerationClient } from 'coze-coding-dev-sdk';
 import { uploadImageFromUrl } from '@/lib/storage';
 import {
   getTopicForGeneration,
@@ -8,33 +8,140 @@ import {
   generateSlug,
   getGuideTypeConfig,
   getTopicsForGame,
+  GAME_TIER_LIST,
   type GuideType,
 } from '@/lib/game-utils';
 
-const SYSTEM_PROMPT = `You are a hardcore gaming content writer for 3AGameMaster.com, the ultimate AAA game guide site. Your audience consists of dedicated gamers who demand expert-level, in-depth strategy content.
+// ========================================
+// P0: UPGRADED SYSTEM PROMPT
+// Deeper content, question-driven, expert authority
+// ========================================
+const SYSTEM_PROMPT = `You are a veteran hardcore gamer and strategy writer for 3AGameMaster.com. You have 10,000+ hours across AAA titles and write guides that OUTPERFORM IGN, Fandom, and YouTube because they're more specific, more actionable, and more honest.
 
-WRITING STYLE - CRITICAL:
-1. HARDENED GAMER TONE - Write like a veteran player sharing secrets with a friend, NOT a journalist or AI assistant
-2. DATA-HEAVY - Specific damage numbers, HP values, stat breakpoints, frame data, DPS calculations wherever possible
-3. OPINIONATED - Tier lists with clear S/A/B/C/D rankings, bold "skip this" vs "must-have" verdicts
-4. ACTIONABLE - Every paragraph must teach the reader something they can immediately use in-game
-5. FORMAT FOR SKIMMING - Tables, bold callouts, numbered steps, "TL;DR" summaries, "Pro Tips" boxes
-6. AMERICAN ENGLISH with heavy gaming slang: DPS, i-frames, min-max, meta, DPS check, AoE, CC, proc, DoT, iframe, poise, stagger, animation cancel, frame trap, oki, tech chase
-7. NO FLUFF - Cut filler paragraphs. If a section doesn't teach something new, delete it.
-8. USE "YOU" not "the player" - direct, personal, like a friend coaching you
+CORE WRITING PHILOSOPHY:
+1. ANSWER A SPECIFIC QUESTION - Every article must answer ONE clear question a player is actively Googling. Not "Boss Guide" but "How to Beat Malenia Phase 2 Without Summons"
+2. PROVE YOUR EXPERTISE - Mention specific mechanics names, frame data, damage formulas, hidden interactions that only someone who played 200+ hours would know
+3. BE BRUTALLY HONEST - If a strategy is suboptimal, say so. If a weapon is trash, call it trash. Readers trust bold opinions over safe hedging.
+4. SHOW, DON'T TELL - Instead of "this build is strong", write "this build clears the DLC final boss in 45 seconds with zero flasks"
+5. EVERY PARAGRAPH TEACHES - If a paragraph doesn't contain information the reader can act on, delete it.
 
-ARTICLE FORMATTING:
-- Use HTML tags: h2, h3, p, ul, li, strong, em, table, tr, td, th
+WRITING STYLE:
+- AMERICAN ENGLISH with heavy gaming terminology: DPS, i-frames, min-max, meta, AoE, CC, proc, DoT, poise, stagger, animation cancel, frame trap, oki, hyperarmor, poise-break, oneshot, speedrun, any%, RNG, softcap, hardcap
+- Use "YOU" not "the player" — direct coaching tone
+- SPECIFIC NUMBERS: damage values, HP thresholds, stat breakpoints, timing windows, stamina costs
+- TIER RANKINGS: S/A/B/C/D with clear justification for each rank
+- "Common Mistakes" with REAL mistakes players make (not generic advice)
+- "Pro Tips" that separate good players from great players
+- Comparison tables with exact stats
+- TL;DR at the top with 3-5 key takeaways
+
+ARTICLE FORMATTING (HTML):
+- h2 for major sections, h3 for subsections
+- Tables for: stat comparisons, tier lists, weapon rankings, loadout comparisons
+- <strong>Pro Tip:</strong> callouts in key sections
+- Numbered steps for sequences
 - Bold key terms on first mention
-- Tables for stat comparisons, tier lists, weapon rankings
-- "Pro Tip:" callouts in key sections using <strong>Pro Tip:</strong>
-- "Common Mistakes" section with numbered items
-- "TL;DR" box at the top with 3-5 bullet points
 - End with "Final Verdict" or "Bottom Line" summary
 
-WORD COUNT: 2000-3000 words. Quality over quantity - every sentence earns its place.`;
+WORD COUNT: 3000-5000 words. This is a DEFINITIVE guide, not a blog post. Depth wins.`;
 
-const ALL_GUIDE_TYPES: GuideType[] = ['boss', 'build', 'collectible', 'walkthrough', 'tips'];
+// ========================================
+// P0: QUESTION-DRIVEN TOPIC TEMPLATES
+// Topics that match actual Google search queries
+// ========================================
+const QUESTION_TEMPLATES: Record<GuideType, string[]> = {
+  boss: [
+    'How to Beat {Boss} Without Taking Damage',
+    '{Boss} Phase 2 Strategy - What Most Players Get Wrong',
+    'How to Defeat {Boss} at Low Level - No Summons Run',
+    '{Boss} One-Phase Kill Strategy - Speedrun Route',
+    'Hidden Weakness of {Boss} That Makes the Fight Easy',
+  ],
+  build: [
+    'Best {Game} {Archetype} Build for Endgame DLC Content (2025)',
+    '{Game} Meta Build That Clears Everything - No Exploit Required',
+    'How to Make {Archetype} Work in {Game} - Underrated Build Guide',
+    '{Game} {Archetype} vs {Archetype} - Which Build is Actually Better?',
+    'Best Starter Build for {Game} New Players - Fastest Progression',
+  ],
+  collectible: [
+    'All {Item} Locations in {Game} - Complete Map Guide',
+    'How to Find Every Hidden {Item} in {Game} - No Missables',
+    '{Game} 100% Completion Checklist - Every Collectible Ranked by Difficulty',
+    'Missable {Item} in {Game} - What You Cannot Get After Point of No Return',
+    'Hardest {Item} to Find in {Game} - Hidden Locations Guide',
+  ],
+  walkthrough: [
+    '{Game} {Area} Complete Walkthrough - All Paths & Secrets',
+    'How to Get to {Area} in {Game} - Step by Step Route',
+    '{Game} {Chapter} Walkthrough - Best Order for Maximum Loot',
+    'How to Unlock {Content} in {Game} - Full Requirements Guide',
+    '{Game} {Ending} Ending Guide - Every Choice That Matters',
+  ],
+  tips: [
+    '{Game} Things I Wish I Knew Before Playing - 15 Expert Tips',
+    'Hidden Mechanics in {Game} That Change Everything',
+    '{Game} Common Mistakes That Ruin Your First Playthrough',
+    'How to Get Overpowered Early in {Game} - Fast Strategy',
+    '{Game} Advanced Combat Guide - From Good to Great',
+  ],
+};
+
+// Pick a question-driven topic for a game
+function getQuestionTopic(
+  gameSlug: string,
+  guideType: GuideType,
+  gameName: string,
+  existingTitles: string[]
+): string | null {
+  const templates = QUESTION_TEMPLATES[guideType];
+  if (!templates || templates.length === 0) return null;
+
+  // Get game-specific topics first
+  const gameTopics = getTopicsForGame(gameSlug, guideType);
+  const existingLower = existingTitles.map(t => t.toLowerCase());
+
+  // Try to combine game-specific topics with question templates
+  for (const template of templates) {
+    for (const gameTopic of gameTopics) {
+      // Extract key noun from game topic (e.g., "Malenia" from "Malenia Strategy")
+      const keyNouns = gameTopic.split(/[\s\-–—:,]+/).filter(w => w.length > 3 && !['guide', 'strategy', 'tips', 'best', 'complete', 'all'].includes(w.toLowerCase()));
+      
+      for (const noun of keyNouns) {
+        const topic = template
+          .replace('{Boss}', noun)
+          .replace('{Archetype}', noun)
+          .replace('{Item}', noun)
+          .replace('{Area}', noun)
+          .replace('{Chapter}', noun)
+          .replace('{Content}', noun)
+          .replace('{Ending}', noun)
+          .replace('{Game}', gameName);
+
+        // Check uniqueness
+        const topicLower = topic.toLowerCase();
+        const isDuplicate = existingLower.some(et => {
+          const overlap = topicLower.split(/\s+/).filter(w => et.toLowerCase().includes(w)).length;
+          return overlap / topicLower.split(/\s+/).length > 0.6;
+        });
+
+        if (!isDuplicate) return topic;
+      }
+    }
+  }
+
+  // Fallback: use template with game name
+  const template = templates[Math.floor(Math.random() * templates.length)];
+  return template
+    .replace('{Boss}', gameName)
+    .replace('{Archetype}', 'Meta')
+    .replace('{Item}', 'Collectible')
+    .replace('{Area}', 'Endgame')
+    .replace('{Chapter}', 'Final')
+    .replace('{Content}', 'Secret')
+    .replace('{Ending}', 'True')
+    .replace('{Game}', gameName);
+}
 
 export async function POST() {
   const startTime = Date.now();
@@ -55,22 +162,62 @@ export async function POST() {
       });
     }
 
+    // ========================================
+    // P0: TIER-BASED GENERATION
+    // Only generate for tier-1 games, 1 article per game
+    // ========================================
+    
     // Get all games
     const gamesResult = await query(
       `SELECT id, name, slug, genre, description FROM games ORDER BY name`
     );
-    const games = gamesResult.rows;
+    const allGames = gamesResult.rows;
 
-    if (games.length === 0) {
+    if (allGames.length === 0) {
       return NextResponse.json({ success: false, message: 'No games found in database.' });
     }
 
-    // For each game, generate 2 articles (one per guide type, rotating through types)
-    const articlesPerGame = 2;
+    // Classify games by tier
+    const tier1Slugs: readonly string[] = GAME_TIER_LIST.tier1;
+    const tier2Slugs: readonly string[] = GAME_TIER_LIST.tier2;
+    const tier1Games = allGames.filter((g: { slug: string }) => tier1Slugs.includes(g.slug));
+    const tier2Games = allGames.filter((g: { slug: string }) => tier2Slugs.includes(g.slug));
+    const tier3Games = allGames.filter((g: { slug: string }) => 
+      !tier1Slugs.includes(g.slug) && !tier2Slugs.includes(g.slug)
+    );
+
+    // Build today's generation queue
+    // Tier 1: 2 articles each, Tier 2: 1 article each, Tier 3: skip today
+    // But rotate tier 2: only 3 tier-2 games per day
+    const dayOfWeek = new Date().getDay(); // 0-6
+    const tier2Slice = tier2Games.slice(
+      dayOfWeek * 3 % tier2Games.length,
+      (dayOfWeek * 3 + 3) % Math.max(tier2Games.length, 1)
+    );
+    // Handle wrap-around for small arrays
+    const tier2Today = tier2Games.length <= 3 
+      ? tier2Games 
+      : [...tier2Slice, ...tier2Games.slice(0, Math.max(0, 3 - tier2Slice.length))].slice(0, 3);
+
+    type GameWithQuota = { id: number; name: string; slug: string; genre: string | null; description: string | null; quota: number };
+    const generationQueue: GameWithQuota[] = [
+      ...tier1Games.map((g: { id: number; name: string; slug: string; genre: string | null; description: string | null }) => ({ ...g, quota: 2 })),
+      ...tier2Today.map((g: { id: number; name: string; slug: string; genre: string | null; description: string | null }) => ({ ...g, quota: 1 })),
+    ];
+
+    // If no tier1/tier2 games matched, fall back to first 5 games
+    if (generationQueue.length === 0) {
+      generationQueue.push(...allGames.slice(0, 5).map((g: { id: number; name: string; slug: string; genre: string | null; description: string | null }) => ({ ...g, quota: 1 })));
+    }
+
+    const totalPlanned = generationQueue.reduce((sum, g) => sum + g.quota, 0);
     let totalGenerated = 0;
     let totalFailed = 0;
 
-    for (const game of games) {
+    // All 5 guide types for rotation
+    const ALL_GUIDE_TYPES: GuideType[] = ['boss', 'build', 'collectible', 'walkthrough', 'tips'];
+
+    for (const game of generationQueue) {
       const gameId = game.id as number;
       const gameSlug = game.slug as string;
       const gameName = game.name as string;
@@ -95,30 +242,36 @@ export async function POST() {
       // Sort guide types by article count (ascending) - generate for types with fewer articles
       const sortedTypes = [...ALL_GUIDE_TYPES].sort((a, b) => (typeCount[a] || 0) - (typeCount[b] || 0));
 
-      for (let i = 0; i < articlesPerGame; i++) {
+      for (let i = 0; i < game.quota; i++) {
         const guideType = sortedTypes[i % sortedTypes.length];
-
-        // Find a unique topic
         let topic: string | null = null;
         let resolvedGuideType = guideType;
 
-        // Try trending topics first
-        const trending = getTrendingTopicsForGame(gameSlug);
-        for (const t of trending) {
-          if (t.guideType === guideType || t.guideType === sortedTypes[(i + 1) % sortedTypes.length]) {
-            const topicLower = t.topic.toLowerCase();
-            const alreadyExists = existingTitles.some(et =>
-              et.toLowerCase().includes(topicLower.slice(0, 20))
-            );
-            if (!alreadyExists) {
-              topic = t.topic;
-              resolvedGuideType = t.guideType;
-              break;
+        // Strategy 1: Question-driven topic (P0 - highest priority)
+        const questionTopic = getQuestionTopic(gameSlug, guideType, gameName, existingTitles);
+        if (questionTopic) {
+          topic = questionTopic;
+        }
+
+        // Strategy 2: Trending topics
+        if (!topic) {
+          const trending = getTrendingTopicsForGame(gameSlug);
+          for (const t of trending) {
+            if (t.guideType === guideType) {
+              const topicLower = t.topic.toLowerCase();
+              const alreadyExists = existingTitles.some(et =>
+                et.toLowerCase().includes(topicLower.slice(0, 20))
+              );
+              if (!alreadyExists) {
+                topic = t.topic;
+                resolvedGuideType = t.guideType;
+                break;
+              }
             }
           }
         }
 
-        // Fallback to auto-selected topic
+        // Strategy 3: Auto-selected topic from game-utils
         if (!topic) {
           const result = getTopicForGeneration(gameSlug, guideType, existingTitles);
           if (result) {
@@ -129,14 +282,16 @@ export async function POST() {
 
         // Last fallback
         if (!topic) {
-          const allTopics = getTopicsForGame(gameSlug);
-          topic = allTopics[Math.floor(Math.random() * allTopics.length)] || `${gameName} General Guide`;
+          topic = `${gameName} Expert ${guideType} Guide (2025)`;
         }
 
         try {
-          // Generate article via LLM
+          // ========================================
+          // P0: UPGRADED CONTENT GENERATION
+          // ========================================
           const guideConfig = getGuideTypeConfig(resolvedGuideType);
           const guideTypeLabel = guideConfig?.label || 'Guide';
+          const trending = getTrendingTopicsForGame(gameSlug);
           const seoKeywords = [
             ...(guideConfig?.keywords || []),
             ...(trending.slice(0, 2).flatMap(t => t.keywords)),
@@ -145,7 +300,7 @@ export async function POST() {
           const config = new Config();
           const llmClient = new LLMClient(config);
 
-          const userPrompt = `Write a DEFINITIVE, KILLER ${guideTypeLabel} about "${topic}" for "${gameName}" (${game.genre || 'Action RPG'}).
+          const userPrompt = `Write a DEFINITIVE, DEEP-DIVE ${guideTypeLabel} that ANSWERS this specific question: "${topic}" for "${gameName}" (${game.genre || 'Action RPG'}).
 
 GAME CONTEXT: ${game.description || `${gameName} is a blockbuster AAA title.`}
 
@@ -153,27 +308,34 @@ GUIDE TYPE: ${guideTypeLabel}
 ${guideConfig?.promptSuffix || ''}
 
 CRITICAL SEO REQUIREMENTS:
-1. Title MUST include: Game Name + Topic + Guide Type (e.g., "Elden Ring Malenia Boss Guide: How to Beat the Hardest Boss in 2025")
-2. Naturally weave these keywords throughout: ${seoKeywords.join(', ')}
-3. Use search-intent phrases: "how to", "best", "guide", "walkthrough", "tips", "strategy", "location", "all"
-4. Meta title: under 60 chars, include game name + primary keyword
-5. Meta description: 150-160 chars, include game name + action verb + benefit
+1. Title MUST be a specific question or answer format that matches what players Google:
+   - GOOD: "How to Beat Malenia Without Summons in Elden Ring (2025)"
+   - GOOD: "Elden Ring Best Bleed Build for DLC Bosses (2025)"
+   - BAD: "Elden Ring Boss Guide" (too generic)
+   - BAD: "Complete Elden Ring Guide" (too broad)
+2. Naturally weave these keywords: ${seoKeywords.join(', ')}
+3. Use search-intent phrases: "how to", "best way to", "where to find", "how to unlock", "is it worth"
+4. Meta title: under 60 chars, specific question + game name
+5. Meta description: 150-160 chars, answer the question directly + tease the solution
 
-CONTENT REQUIREMENTS:
-1. Write for HARDCORE gamers who already know the basics - skip tutorial-level content
-2. Include SPECIFIC numbers wherever possible
-3. Provide TIER RANKINGS or "best X" lists wherever applicable
-4. Add "Common Mistakes" section
-5. Add "Pro Tips" callouts
-6. Use tables for stat comparisons
-7. 2000-3000 words, HTML formatted
-8. Include 2025 in the title if it's a build or tier list guide
+CONTENT DEPTH REQUIREMENTS (CRITICAL - THIS IS WHAT SEPARATES US FROM WIKIS):
+1. OPEN WITH THE ANSWER - In the first paragraph, give the reader the direct answer to their question. Don't bury it.
+2. SPECIFIC NUMBERS - Damage values, HP thresholds, stat breakpoints, stamina costs, frame data. No "high damage" - say "deals 1,247 damage per hit at +25 upgrade"
+3. STEP-BY-STEP EXECUTION - Break the strategy into numbered steps a reader can follow in real-time while playing
+4. COMPARISON TABLES - Compare options with exact stats: damage, speed, range, stamina cost, requirements
+5. TIER RANKINGS - S/A/B/C/D with one-line justification for each
+6. COMMON MISTAKES - 5+ REAL mistakes players make (not generic "be careful")
+7. PRO TIPS - Advanced tricks that separate good from great players
+8. ALTERNATIVE STRATEGIES - Not everyone plays the same way, provide 2-3 viable approaches
+9. 3000-5000 words, HTML formatted. Every paragraph teaches something new.
+10. Include 2025 in the title for builds/tier lists
+11. Add internal link suggestions: "See also: [related guide topic]" at relevant points
 
 Format your response as JSON:
 {
   "title": "...",
-  "content": "...(HTML content)...",
-  "summary": "...(2-3 sentence hook)...",
+  "content": "...(HTML content, 3000-5000 words)...",
+  "summary": "...(2-3 sentence hook that answers the core question)...",
   "meta_title": "...(under 60 chars)...",
   "meta_description": "...(150-160 chars)...",
   "keywords": ["...", "..."]
@@ -186,7 +348,7 @@ Format your response as JSON:
 
           const response = await llmClient.invoke(messages, {
             model: 'doubao-seed-2-0-lite-260215',
-            temperature: 0.8,
+            temperature: 0.7,
           });
 
           // Parse AI response
@@ -210,21 +372,21 @@ Format your response as JSON:
             articleData = {
               title: `${gameName}: ${topic} - ${guideTypeLabel} (2025)`,
               content: response.content,
-              summary: `Ultimate ${guideTypeLabel.toLowerCase()} for ${gameName} covering ${topic.toLowerCase()}.`,
+              summary: `Expert ${guideTypeLabel.toLowerCase()} for ${gameName} answering: ${topic.toLowerCase()}.`,
               meta_title: `${gameName} ${topic} - ${guideTypeLabel}`,
               meta_description: `Master ${gameName} with our expert ${guideTypeLabel.toLowerCase()} on ${topic.toLowerCase()}.`,
               keywords: [gameName.toLowerCase(), topic.toLowerCase(), guideTypeLabel.toLowerCase(), 'guide'],
             };
           }
 
-          // Insert article directly as 'published' status (auto-approve)
+          // Insert article directly as 'published' status
           const baseSlug = generateSlug(articleData.title);
           const slugSuffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
           const slug = `${baseSlug}-${slugSuffix}`;
 
           const insertResult = await query(
             `INSERT INTO articles (game_id, title, slug, content, summary, status, language, meta_title, meta_description, keywords, author, published_at)
-             VALUES ($1, $2, $3, $4, $5, 'published', 'en', $6, $7, $8, 'AI Editor', NOW())
+             VALUES ($1, $2, $3, $4, $5, 'published', 'en', $6, $7, $8, '3A Game Master', NOW())
              RETURNING id`,
             [gameId, articleData.title, slug, articleData.content, articleData.summary, articleData.meta_title, articleData.meta_description, articleData.keywords]
           );
@@ -293,8 +455,10 @@ Format your response as JSON:
       success: true,
       message: `Daily generation complete: ${totalGenerated} published, ${totalFailed} failed in ${duration}s`,
       summary: {
-        totalGames: games.length,
-        articlesPerGame,
+        tier1Games: tier1Games.map((g: { name: string }) => g.name),
+        tier2GamesToday: tier2Today.map((g: { name: string }) => g.name),
+        tier3Skipped: tier3Games.map((g: { name: string }) => g.name),
+        totalPlanned,
         totalGenerated,
         totalFailed,
         duration: `${duration}s`,

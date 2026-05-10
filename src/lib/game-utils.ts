@@ -124,6 +124,38 @@ export const GUIDE_TYPES = [
 export type GuideType = (typeof GUIDE_TYPES)[number]['type'];
 
 // ========================================
+// P0: GAME TIER LIST
+// Prioritize high-traffic games for content generation
+// Based on Google Trends search volume for game guides
+// ========================================
+export const GAME_TIER_LIST = {
+  // Tier 1: Highest search volume, generate 2 articles/day
+  tier1: [
+    'elden-ring',
+    'elden-ring-shadow-of-the-erdtree',
+    'black-myth-wukong',
+    'baldurs-gate-3',
+    'diablo-iv',
+    'zelda-totk',
+  ],
+  // Tier 2: Solid search volume, generate 1 article/day (rotated, 3 per day)
+  tier2: [
+    'cyberpunk-2077-phantom-liberty',
+    'god-of-war-ragnarok',
+    'resident-evil-4-remake',
+    'final-fantasy-vii-rebirth',
+    'helldivers-2',
+    'starfield',
+    'stellar-blade',
+    'dragons-dogma-2',
+    'metaphor-refantazio',
+    'silent-hill-2-remake',
+  ],
+  // Tier 3: Everything else - skipped in daily auto-generation
+  // Can still be generated manually via admin
+} as const;
+
+// ========================================
 // GAME TOPICS DATABASE
 // Per-game topic suggestions organized by guide type
 // ========================================
