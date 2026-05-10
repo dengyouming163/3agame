@@ -44,7 +44,7 @@ export async function POST() {
     // Check if daily generation already ran today
     const today = new Date().toISOString().slice(0, 10);
     const checkResult = await query(
-      `SELECT id FROM generation_logs WHERE prompt LIKE 'daily-auto:%' AND created_at::text LIKE $1 LIMIT 1`,
+      `SELECT id FROM generation_logs WHERE prompt LIKE 'daily-auto:%' AND generated_at::text LIKE $1 LIMIT 1`,
       [`${today}%`]
     );
     if (checkResult.rows.length > 0) {

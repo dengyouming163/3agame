@@ -1,5 +1,4 @@
 import { S3Storage } from 'coze-coding-dev-sdk';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 // ─── Storage Configuration ───
 // Production: Cloudflare R2 (global CDN, zero egress fees)
@@ -13,11 +12,14 @@ function isProduction(): boolean {
 }
 
 // ─── R2 Client (Production) ───
-let r2Client: S3Client | null = null;
+// Use dynamic import to avoid turbopack/pnpm symlink issues in development
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let r2Client: any = null;
 
-function getR2Client(): S3Client {
+async function getR2Client() {
   if (!r2Client) {
-    r2Client = new S3Client({
+    const { S3Client } = await import('@aws-sdk/client-s3');
+    r2Client = new (S3Client as any)({
       region: 'auto',
       endpoint: process.env.R2_ENDPOINT || 'https://60a85e45fc6d5612283f700354563a42.r2.cloudflarestorage.com',
       credentials: {
@@ -59,7 +61,8 @@ export async function uploadImage(
 ): Promise<string> {
   if (isProduction()) {
     const r2Key = `articles/${fileName}`;
-    const client = getR2Client();
+    const { PutObjectCommand } = await import('@aws-sdk/client-s3');
+    const client = await getR2Client();
     await client.send(new PutObjectCommand({
       Bucket: R2_BUCKET,
       Key: r2Key,
@@ -156,7 +159,7 @@ export async function deleteImage(key: string): Promise<boolean> {
         const url = new URL(key);
         const r2Key = url.pathname.substring(1); // Remove leading /
         const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
-        const client = getR2Client();
+        const client = await getR2Client();
         await client.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: r2Key }));
         return true;
       }
@@ -216,7 +219,7 @@ export async function getCachedImageUrl(key: string): Promise<string> {
   return getSignedImageUrl(key, 604800);
 }
 
-/** @deprecated Use uploadImage instead */
+/** @deprecated Use getImageUrl instead */
 export function getStorage(): S3Storage {
   return getTOSStorage();
 }
