@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { LLMClient, Config, ImageGenerationClient } from 'coze-coding-dev-sdk';
+import { LLMClient, Config, ImageGenerationClient, SearchClient, HeaderUtils } from 'coze-coding-dev-sdk';
 import { uploadImageFromUrl } from '@/lib/storage';
 import {
   getTopicForGeneration,
@@ -143,9 +143,91 @@ function getQuestionTopic(
     .replace('{Game}', gameName);
 }
 
-export async function POST() {
+// ========================================
+// P1: SEARCH-DRIVEN TOPIC DISCOVERY
+// Use web search to find what players are actually searching for
+// ========================================
+interface DiscoveredTopic {
+  title: string;
+  source: string;
+  type: 'question' | 'guide' | 'news';
+  covered: boolean;
+}
+
+async function discoverTrendingTopics(
+  gameName: string,
+  request: NextRequest
+): Promise<DiscoveredTopic[]> {
+  try {
+    const customHeaders = HeaderUtils.extractForwardHeaders(request.headers);
+    const config = new Config();
+    const searchClient = new SearchClient(config, customHeaders);
+
+    // Search 1: Recent questions on Reddit/forums
+    const questionsQuery = `${gameName} guide tips tricks how to best site:reddit.com`;
+    const questionsResult = await searchClient.advancedSearch(questionsQuery, {
+      count: 8,
+      timeRange: '1m',
+      needSummary: false,
+    });
+
+    // Search 2: Popular guides/searches
+    const howToQuery = `${gameName} how to best guide walkthrough build`;
+    const howToResult = await searchClient.webSearch(howToQuery, 8, false);
+
+    // Search 3: Latest news/updates
+    const newsQuery = `${gameName} update patch new content 2025`;
+    const newsResult = await searchClient.advancedSearch(newsQuery, {
+      count: 5,
+      timeRange: '1w',
+      needSummary: false,
+    });
+
+    const allResults = [
+      ...(questionsResult.web_items || []),
+      ...(howToResult.web_items || []),
+      ...(newsResult.web_items || []),
+    ];
+
+    const topics: DiscoveredTopic[] = [];
+    for (const item of allResults) {
+      const title = item.title || '';
+      const url = item.url || '';
+      const siteName = item.site_name || '';
+
+      let type: 'question' | 'guide' | 'news' = 'guide';
+      if (url.includes('reddit.com') || title.includes('?') || title.toLowerCase().includes('how to')) {
+        type = 'question';
+      } else if (title.toLowerCase().includes('update') || title.toLowerCase().includes('patch') || title.toLowerCase().includes('new')) {
+        type = 'news';
+      }
+
+      let cleanTitle = title
+        .replace(/ - Reddit$/i, '')
+        .replace(/ \| .*$/i, '')
+        .replace(/ : .*$/i, '')
+        .trim();
+
+      if (cleanTitle && cleanTitle.length > 10 && cleanTitle.length < 120) {
+        topics.push({
+          title: cleanTitle,
+          source: siteName || 'web',
+          type,
+          covered: false,
+        });
+      }
+    }
+
+    return topics;
+  } catch (error) {
+    console.error('Search topic discovery failed:', error instanceof Error ? error.message : 'Unknown');
+    return [];
+  }
+}
+
+export async function POST(request: NextRequest) {
   const startTime = Date.now();
-  const results: { game: string; topic: string; guideType: string; status: string; title?: string; error?: string }[] = [];
+  const results: { game: string; topic: string; guideType: string; source: string; status: string; title?: string; error?: string }[] = [];
 
   try {
     // Check if daily generation already ran today
@@ -246,11 +328,44 @@ export async function POST() {
         const guideType = sortedTypes[i % sortedTypes.length];
         let topic: string | null = null;
         let resolvedGuideType = guideType;
+        let topicSource = 'template';
 
-        // Strategy 1: Question-driven topic (P0 - highest priority)
-        const questionTopic = getQuestionTopic(gameSlug, guideType, gameName, existingTitles);
-        if (questionTopic) {
-          topic = questionTopic;
+        // Strategy 0 (P1): Web search-driven topic discovery - HIGHEST PRIORITY
+        // Only do search for the first article of each game (avoid too many API calls)
+        if (i === 0) {
+          try {
+            const discoveredTopics = await discoverTrendingTopics(gameName, request);
+            // Find uncovered topics that match this game
+            const uncovered = discoveredTopics.filter(t => !t.covered);
+            if (uncovered.length > 0) {
+              // Pick a question-type topic first, then news, then guide
+              const prioritized = uncovered.sort((a, b) => {
+                if (a.type !== b.type) return a.type === 'question' ? -1 : a.type === 'news' ? 0 : 1;
+                return 0;
+              });
+              topic = prioritized[0].title;
+              topicSource = `search:${prioritized[0].source}`;
+              // Map topic type to guide type
+              if (prioritized[0].type === 'question') {
+                resolvedGuideType = topic.toLowerCase().includes('build') || topic.toLowerCase().includes('best weapon') ? 'build' :
+                  topic.toLowerCase().includes('find') || topic.toLowerCase().includes('location') ? 'collectible' :
+                  topic.toLowerCase().includes('beat') || topic.toLowerCase().includes('defeat') || topic.toLowerCase().includes('boss') ? 'boss' : 'tips';
+              } else if (prioritized[0].type === 'news') {
+                resolvedGuideType = 'tips';
+              }
+            }
+          } catch (searchErr) {
+            console.error(`Search discovery failed for ${gameName}:`, searchErr instanceof Error ? searchErr.message : 'Unknown');
+          }
+        }
+
+        // Strategy 1: Question-driven topic (P0)
+        if (!topic) {
+          const questionTopic = getQuestionTopic(gameSlug, guideType, gameName, existingTitles);
+          if (questionTopic) {
+            topic = questionTopic;
+            topicSource = 'question-template';
+          }
         }
 
         // Strategy 2: Trending topics
@@ -265,6 +380,7 @@ export async function POST() {
               if (!alreadyExists) {
                 topic = t.topic;
                 resolvedGuideType = t.guideType;
+                topicSource = 'trending';
                 break;
               }
             }
@@ -277,12 +393,14 @@ export async function POST() {
           if (result) {
             topic = result.topic;
             resolvedGuideType = result.guideType;
+            topicSource = 'auto';
           }
         }
 
         // Last fallback
         if (!topic) {
           topic = `${gameName} Expert ${guideType} Guide (2025)`;
+          topicSource = 'fallback';
         }
 
         try {
@@ -432,6 +550,7 @@ Format your response as JSON:
             game: gameName,
             topic,
             guideType: resolvedGuideType,
+            source: topicSource,
             status: 'published',
             title: articleData.title,
           });
@@ -442,6 +561,7 @@ Format your response as JSON:
             game: gameName,
             topic,
             guideType: resolvedGuideType,
+            source: topicSource,
             status: 'failed',
             error: articleError instanceof Error ? articleError.message : 'Unknown error',
           });

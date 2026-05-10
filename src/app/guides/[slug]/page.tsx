@@ -23,6 +23,7 @@ interface ArticleDetail {
   keywords: string[] | null;
   author: string;
   published_at: string | null;
+  game_id: number | null;
   game_name: string | null;
   game_slug: string | null;
   cover_image_key: string | null;
@@ -34,7 +35,7 @@ async function getArticle(slug: string): Promise<ArticleDetail | null> {
     const result = await query(
       `SELECT a.id, a.title, a.slug, a.content, a.summary, a.status, a.language,
         a.meta_title, a.meta_description, a.keywords, a.author,
-        a.published_at, a.cover_image_key,
+        a.published_at, a.cover_image_key, a.game_id,
         g.name as game_name, g.slug as game_slug
        FROM articles a
        LEFT JOIN games g ON a.game_id = g.id
@@ -95,6 +96,35 @@ function getReadingTime(content: string): string {
 export default async function GuidePage({ params }: PageProps) {
   const { slug } = await params;
   const article = await getArticle(slug);
+
+  // Fetch related articles for internal linking
+  let relatedArticles: Array<{
+    id: number; title: string; slug: string; cover_image_key: string | null; game_name: string | null;
+  }> = [];
+  if (article) {
+    try {
+      const { query: dbQuery } = await import('@/lib/db');
+      // Get articles from the same game, or with similar keywords
+      const relatedResult = article.game_id
+        ? await dbQuery(
+            `SELECT a.id, a.title, a.slug, a.cover_image_key, g.name as game_name
+             FROM articles a LEFT JOIN games g ON a.game_id = g.id
+             WHERE a.game_id = $1 AND a.id != $2 AND a.status = 'published'
+             ORDER BY a.published_at DESC LIMIT 6`,
+            [article.game_id, article.id]
+          )
+        : await dbQuery(
+            `SELECT a.id, a.title, a.slug, a.cover_image_key, g.name as game_name
+             FROM articles a LEFT JOIN games g ON a.game_id = g.id
+             WHERE a.status = 'published' AND a.id != $1
+             ORDER BY a.published_at DESC LIMIT 6`,
+            [article.id]
+          );
+      relatedArticles = relatedResult.rows;
+    } catch {
+      // Non-critical, continue without related articles
+    }
+  }
 
   if (!article) {
     return (
@@ -258,6 +288,46 @@ export default async function GuidePage({ params }: PageProps) {
                   {kw}
                 </span>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Related Articles - Internal Linking (P1) */}
+        {relatedArticles.length > 0 && (
+          <div className="mt-12 pt-8 border-t border-border">
+            <h3 className="text-lg font-bold text-foreground font-display mb-6 tracking-wide">RELATED GUIDES</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {relatedArticles.map((related) => {
+                const relCoverUrl = getImageUrlSync(related.cover_image_key);
+                return (
+                  <Link
+                    key={related.id}
+                    href={`/guides/${related.slug}`}
+                    className="group rounded-xl border border-border bg-card/50 overflow-hidden hover:border-purple-500/30 hover:shadow-[0_0_30px_rgba(124,58,237,0.15)] transition-all duration-300"
+                  >
+                    {related.cover_image_key && (
+                      <div className="aspect-video overflow-hidden">
+                        <img
+                          src={relCoverUrl}
+                          alt={related.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                          width={400}
+                          height={225}
+                        />
+                      </div>
+                    )}
+                    <div className="p-4">
+                      {related.game_name && (
+                        <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">{related.game_name}</span>
+                      )}
+                      <h4 className="text-sm font-semibold text-foreground mt-1 line-clamp-2 group-hover:text-cyan-400 transition-colors">
+                        {related.title}
+                      </h4>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}
